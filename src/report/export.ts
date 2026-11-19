@@ -2,7 +2,6 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import type { RefObject } from 'react';
-import { captureRef } from 'react-native-view-shot';
 
 import { formatDateID } from '@/lib/dates';
 import { buildReportHtml, reportFileName, reportTotals, type ReportMeta } from './html';
@@ -105,7 +104,21 @@ export async function captureReportImage(
   meta: ReportMeta,
 ): Promise<string> {
   if (!ref.current) throw new Error('Laporan belum siap.');
-  const tmp = await captureRef(ref as never, {
+
+  // view-shot bukan modul bawaan Expo Go. Di-require saat dipakai supaya
+  // aplikasi tetap jalan di Expo Go; hanya export gambar yang tidak tersedia.
+  let captureRef: ((target: unknown, options: Record<string, unknown>) => Promise<string>) | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    captureRef = require('react-native-view-shot').captureRef;
+  } catch {
+    captureRef = null;
+  }
+  if (!captureRef) {
+    throw new Error('Export gambar butuh aplikasi versi build. Pakai PDF untuk sekarang.');
+  }
+
+  const tmp = await captureRef(ref, {
     format: 'jpg',
     quality: 0.9,
     result: 'tmpfile',
