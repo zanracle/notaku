@@ -77,6 +77,10 @@ npm test           # hanya unit test parser/uang/tanggal
 npm run typecheck
 ```
 
+Kalau menambah atau menghapus dependency, jalankan `npx npm@10 install`, bukan `npm install`.
+Server EAS memakai npm 10; lockfile dari npm 11 bisa ditolak dengan error
+`Missing: ... from lock file`.
+
 ## Batasan yang diketahui
 
 - Database **tidak terenkripsi**. Backup ZIP juga tanpa sandi. Simpan di Drive pribadi.
