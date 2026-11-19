@@ -25,7 +25,12 @@ Dokumen kerja. Diperbarui saat implementasi. README untuk cara pakai.
 - [x] **M3** ML Kit + parser + confidence + review (kode)
 - [x] **M3b** Gemini BYOK, tes kunci, pemilihan angka, `ai_usage`
 - [x] **M4** PDF/JPG/CSV/print, status terkirim
-- [ ] **M5** build APK + uji di HP + kirim satu dinas nyata
+- [x] **M5a** build APK cloud berhasil (ML Kit ikut terkompilasi)
+- [ ] **M5b** uji di HP + kirim satu dinas nyata
+
+APK: https://expo.dev/artifacts/eas/qonYdfiNPGk1eftrN9judjZTFoSCi20opReWossxJP4.apk
+Build: https://expo.dev/accounts/zanracle/projects/notaku/builds/dae2f822-3442-4d19-80ad-06a7f61b4bff
+Dibuat: 2026-11-19 17:56 UTC, 167 MB (universal APK, semua ABI).
 
 Definisi selesai M3 yang belum bisa saya buktikan tanpa HP: akurasi total pada 10 struk
 fisik â‰¥ 7/10 tanpa koreksi. Fixture sintetis lulus 13/13.
@@ -73,4 +78,5 @@ split per item, i18n, auto-update APK, enkripsi database.
 ## Risiko build yang belum bisa dibuktikan
 
 ML Kit dibangun sebagai Expo module (`@infinitered/react-native-mlkit-text-recognition`), jadi peluang build sukses tinggi, tapi belum pernah dikompilasi di perangkat nyata. Kalau EAS build gagal di bagian ini, aplikasi tetap berguna tanpa OCR: hapus dependensi ML Kit, dan semua alur manual + foto + laporan tetap jalan. Jangan hapus sebelum mencoba build sekali.
+
 
