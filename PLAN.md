@@ -1,4 +1,4 @@
-# Rencana & Status — NotaKu
+﻿# Rencana & Status â€” NotaKu
 
 Dokumen kerja. Diperbarui saat implementasi. README untuk cara pakai.
 
@@ -28,7 +28,7 @@ Dokumen kerja. Diperbarui saat implementasi. README untuk cara pakai.
 - [ ] **M5** build APK + uji di HP + kirim satu dinas nyata
 
 Definisi selesai M3 yang belum bisa saya buktikan tanpa HP: akurasi total pada 10 struk
-fisik ≥ 7/10 tanpa koreksi. Fixture sintetis lulus 13/13.
+fisik â‰¥ 7/10 tanpa koreksi. Fixture sintetis lulus 13/13.
 
 ## Verifikasi yang sudah dijalankan
 
@@ -36,23 +36,25 @@ fisik ≥ 7/10 tanpa koreksi. Fixture sintetis lulus 13/13.
 - `eslint .` bersih
 - `vitest` 19 tes lulus (13 fixture struk + uang + tanggal)
 - `expo export -p android` sukses (bundle 3.8 MB, semua modul resolve)
+- `npx expo-doctor` 20/20 checks lulus
+- commit awal git `ff1d45a`
 
 Belum dijalankan (butuh perangkat/rekayasa): kamera, ML Kit, PDF nyata, share sheet,
 print, biometrik, backup ke Drive, restore di HP lain.
 
-## Saat kembali — checklist 15 menit
+## Saat kembali â€” checklist 15 menit
 
 1. `cd notaku`
 2. `npm run check`
 3. `npm i -g eas-cli && eas login`
-4. `eas build -p android --profile preview` (APK, ±10 menit)
+4. `eas build -p android --profile preview` (APK, Â±10 menit)
 5. Pasang APK di HP
-6. Pengaturan → isi identitas, logo, kategori
-7. Pengaturan → AI → tempel kunci Gemini → Tes kunci
+6. Pengaturan â†’ isi identitas, logo, kategori
+7. Pengaturan â†’ AI â†’ tempel kunci Gemini â†’ Tes kunci
 8. Foto 10 struk berturut-turut, koreksi bila perlu
-9. Buka dinas → Export PDF lengkap → cek gambar struk
+9. Buka dinas â†’ Export PDF lengkap â†’ cek gambar struk
 10. Kirim ke finance, lalu "Tandai terkirim"
-11. Backup → simpan ZIP ke Drive
+11. Backup â†’ simpan ZIP ke Drive
 12. Tutup aplikasi, buka lagi, pastikan data masih ada
 
 ## Kalau ada bug
@@ -66,3 +68,9 @@ print, biometrik, backup ke Drive, restore di HP lain.
 
 Cloud sync, login, portal approval, grafik, integrasi accounting, multi-currency,
 split per item, i18n, auto-update APK, enkripsi database.
+
+
+## Risiko build yang belum bisa dibuktikan
+
+ML Kit dibangun sebagai Expo module (`@infinitered/react-native-mlkit-text-recognition`), jadi peluang build sukses tinggi, tapi belum pernah dikompilasi di perangkat nyata. Kalau EAS build gagal di bagian ini, aplikasi tetap berguna tanpa OCR: hapus dependensi ML Kit, dan semua alur manual + foto + laporan tetap jalan. Jangan hapus sebelum mencoba build sekali.
+
