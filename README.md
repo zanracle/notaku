@@ -2,7 +2,7 @@
 
 Pencatat pengeluaran dari foto struk. Untuk reimburse kantor maupun catatan pribadi.
 
-Foto struk → Gemini/OCR membaca nama toko, tanggal, item satu per satu, dan total →
+Foto struk → Gemini membaca nama toko, tanggal, item satu per satu, dan total →
 kamu koreksi seperlunya → tersimpan di dompet → cetak sebagai struk kasir atau ekspor CSV.
 
 Data di HP (SQLite), tanpa akun, tanpa cloud. Koneksi keluar hanya ke Gemini saat kamu
@@ -16,7 +16,6 @@ memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
 | Catat pengeluaran manual | selesai |
 | Kamera, kompres foto, thumbnail | selesai |
 | Gemini otomatis saat kunci API terisi | selesai |
-| OCR lokal ML Kit sebagai cadangan | selesai (butuh build) |
 | Item per produk: nama, qty, harga, tambah/hapus/edit | selesai |
 | Total otomatis dari item + pajak, bisa ditimpa | selesai |
 | Cetak struk gaya kasir (PDF / gambar / print) | selesai |
@@ -30,10 +29,10 @@ memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
 
 ```bash
 npm install
-npm start          # Expo Go: semua jalan kecuali OCR kamera & simpan gambar
+npm start          # Expo Go: semua jalan kecuali simpan gambar
 ```
 
-OCR kamera butuh build karena ML Kit adalah modul native. Aplikasi mendeteksi hal ini.
+Tanpa kunci Gemini, foto tetap tersimpan sebagai bukti tetapi item dan nominal diisi manual.
 
 ## Build APK
 
@@ -55,7 +54,7 @@ src/app/              layar (expo-router)
   review.tsx          editor struk + item + AI
   wallet/[id].tsx     detail dompet + ekspor
 src/db/               skema, migrasi, query, tes migrasi
-src/ocr/              ML Kit (lazy) + parser item + fixtures
+src/ocr/              parser teks struk + fixtures
 src/ai/               Gemini: prompt, skema JSON, error
 src/receipt/          HTML struk 80mm + PDF/JPG/print/CSV
 src/storage/          foto + backup ZIP
