@@ -26,10 +26,10 @@ export default function RootLayout() {
           <Stack.Screen name="review" />
           <Stack.Screen name="wallet/[id]" />
           <Stack.Screen name="backup" />
-          <Stack.Screen name="settings/profile" />
-          <Stack.Screen name="settings/ai" />
-          <Stack.Screen name="settings/wallets" />
-          <Stack.Screen name="settings/categories" />
+          <Stack.Screen name="pengaturan/profile" />
+          <Stack.Screen name="pengaturan/ai" />
+          <Stack.Screen name="pengaturan/wallets" />
+          <Stack.Screen name="pengaturan/categories" />
         </Stack>
       </AppProvider>
     </ThemeProvider>

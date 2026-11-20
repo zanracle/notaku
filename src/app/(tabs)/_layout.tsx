@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Tabs } from 'expo-router';
+import { router, Tabs } from 'expo-router';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, space, useTheme } from '@/theme';
 import { Txt } from '@/ui/components';
+
+const TABS = ['index', 'expenses', 'settings'] as const;
 
 const ICONS: Record<string, { active: 'home' | 'receipt' | 'settings'; idle: 'home-outline' | 'receipt-outline' | 'settings-outline' }> = {
   index: { active: 'home', idle: 'home-outline' },
@@ -18,9 +20,16 @@ const LABELS: Record<string, string> = {
   settings: 'Atur',
 };
 
-function TabBar({ state, navigation }: { state: any; navigation: any }) {
+const PATHS: Record<string, '/' | '/expenses' | '/settings'> = {
+  index: '/',
+  expenses: '/expenses',
+  settings: '/settings',
+};
+
+function TabBar({ state }: { state: any }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const activeName = state?.routes?.[state.index]?.name ?? 'index';
 
   return (
     <View
@@ -37,21 +46,18 @@ function TabBar({ state, navigation }: { state: any; navigation: any }) {
         paddingTop: 8,
         paddingHorizontal: space.md,
       }}>
-      {state.routes.map((route: any, index: number) => {
-        const focused = state.index === index;
-        const icon = ICONS[route.name] ?? ICONS.index;
-        const label = LABELS[route.name] ?? route.name;
+      {TABS.map((name) => {
+        const focused = activeName === name;
+        const icon = ICONS[name];
         return (
           <Pressable
-            key={route.key}
+            key={name}
             onPress={() => {
-              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-              if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+              if (!focused) router.navigate(PATHS[name]);
             }}
-            onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
             accessibilityRole="button"
             accessibilityState={focused ? { selected: true } : {}}
-            accessibilityLabel={label}
+            accessibilityLabel={LABELS[name]}
             style={{ flex: 1, alignItems: 'center' }}>
             <View
               style={{
@@ -68,11 +74,8 @@ function TabBar({ state, navigation }: { state: any; navigation: any }) {
                 size={19}
                 color={focused ? theme.primary : theme.textMuted}
               />
-              <Txt
-                variant="small"
-                color={focused ? theme.primary : theme.textMuted}
-                style={{ fontWeight: '700' }}>
-                {label}
+              <Txt variant="small" color={focused ? theme.primary : theme.textMuted} style={{ fontWeight: '700' }}>
+                {LABELS[name]}
               </Txt>
             </View>
           </Pressable>
@@ -84,11 +87,12 @@ function TabBar({ state, navigation }: { state: any; navigation: any }) {
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...(props as any)} />}>
+    <Tabs
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <TabBar state={(props as any).state} />}>
       <Tabs.Screen name="index" options={{ title: 'Beranda' }} />
       <Tabs.Screen name="expenses" options={{ title: 'Biaya' }} />
       <Tabs.Screen name="settings" options={{ title: 'Atur' }} />
     </Tabs>
   );
 }
-

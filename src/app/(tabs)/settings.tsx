@@ -46,7 +46,7 @@ export default function SettingsScreen() {
       </View>
 
       <PressableScale
-        onPress={() => router.push('/settings/profile')}
+        onPress={() => router.push('/pengaturan/profile')}
         haptic="selection"
         style={{
           flexDirection: 'row',
@@ -90,7 +90,7 @@ export default function SettingsScreen() {
           iconBg={theme.mint}
           title="Dompet"
           subtitle={`${walletCount} dompet aktif`}
-          onPress={() => router.push('/settings/wallets')}
+          onPress={() => router.push('/pengaturan/wallets')}
         />
         <Divider inset={56} />
         <ListRow
@@ -99,7 +99,7 @@ export default function SettingsScreen() {
           iconBg={theme.accentSoft}
           title="Kategori"
           subtitle="Atur label pengeluaran"
-          onPress={() => router.push('/settings/categories')}
+          onPress={() => router.push('/pengaturan/categories')}
         />
         <Divider inset={56} />
         <ListRow
@@ -126,7 +126,7 @@ export default function SettingsScreen() {
               tone={hasKey ? 'success' : 'neutral'}
             />
           }
-          onPress={() => router.push('/settings/ai')}
+          onPress={() => router.push('/pengaturan/ai')}
           chevron={false}
         />
       </Card>
