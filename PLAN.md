@@ -57,3 +57,10 @@ lalu diimplementasikan. Palet dan radius mengikuti file desain itu.
 - Migrasi menghapus tabel `expenses` lama. Sudah diuji, tapi tetap: minta user membuat
   backup sebelum update kalau ada data penting.
 - Build hanya arm64.
+
+## Catatan v1.1 (ukuran)
+
+- Target < 50 MB. APK arm64 + R8 + shrink resources.
+- Ukuran turun dari 167 MB (universal, v1.0) -> 51,8 MB -> target ~41 MB setelah ML Kit lokal dilepas.
+- Barcode scanner expo-camera dimatikan lewat arcodeScannerEnabled: false.
+- OCR lokal dihapus; pembacaan struk memakai Gemini. Tanpa kunci, isi manual.
