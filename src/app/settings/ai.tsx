@@ -91,8 +91,8 @@ export default function AiSettingsScreen() {
         </View>
         <Txt variant="small" color={theme.textMuted}>
           {keyState === 'saved'
-            ? 'Setiap foto struk langsung dibaca Gemini. OCR lokal jadi cadangan kalau koneksi gagal.'
-            : 'Tanpa kunci, NotaKu memakai OCR lokal dan kamu mengisi sisanya manual.'}
+            ? 'Setiap foto struk langsung dibaca Gemini. Tanpa koneksi, isi item manual.'
+            : 'Tanpa kunci, foto tetap tersimpan sebagai bukti dan item diisi manual.'}
         </Txt>
       </Card>
 

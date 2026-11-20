@@ -145,8 +145,7 @@ export default function ReviewScreen() {
     [settings.ai_model, categories],
   );
 
-  const readPhoto = useCallback(
-    async (uri: string) => {
+  const readPhoto = useCallback(    async (uri: string) => {
       setReading(true);
       const text = await recognizeText(uri);
       setReading(false);
@@ -182,6 +181,26 @@ export default function ReviewScreen() {
     },
     [readWithAi, settings.ai_auto, settings.ai_consent_at, set],
   );
+
+  const retryAi = async () => {
+    if (!photoUri) return;
+    if (!settings.ai_consent_at) {
+      const ok = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'Baca struk dengan Gemini?',
+          'Foto struk dikirim langsung dari HP ke Google memakai kunci API milikmu. Lanjut?',
+          [
+            { text: 'Batal', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Lanjut', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        );
+      });
+      if (!ok) return;
+      await set('ai_consent_at', new Date().toISOString());
+    }
+    await readWithAi(photoUri, ocrText);
+  };
 
   useEffect(() => {
     if (booted.current) return;
@@ -430,6 +449,28 @@ export default function ReviewScreen() {
           ) : null}
         </View>
       </Card>
+
+      {photoUri ? (
+        <PressableScale
+          onPress={retryAi}
+          haptic="selection"
+          disabled={aiBusy}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            alignSelf: 'flex-start',
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: radii.pill,
+            backgroundColor: theme.mint,
+          }}>
+          <Ionicons name="sparkles" size={14} color={theme.primary} />
+          <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+            {aiBusy ? 'Gemini sedang membaca…' : 'Baca ulang dengan AI'}
+          </Txt>
+        </PressableScale>
+      ) : null}
 
       <Card style={{ gap: space.lg }}>
         <Field
