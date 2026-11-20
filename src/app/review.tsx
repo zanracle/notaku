@@ -4,31 +4,36 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Alert, Modal, TextInput, View } from 'react-native';
 
-import { askGemini, aiErrorMessage, type AiReceipt } from '@/ai/gemini';
-import { TripPicker } from '@/components/trip-picker';
+import { askGemini, aiErrorMessage, getApiKey, type AiReceipt } from '@/ai/gemini';
+import { ReceiptSheet } from '@/components/receipt-sheet';
+import { WalletPicker } from '@/components/wallet-picker';
 import {
-  activeTrip,
   createExpense,
-  ensureDefaultTrip,
+  ensureDefaultWallet,
   findDuplicate,
   getExpense,
-  listTrips,
+  listItems,
+  listWallets,
   logAiUsage,
+  recentWalletId,
   softDeleteExpense,
   updateExpense,
   type DuplicateHit,
   type Expense,
-  type Trip,
+  type ExpenseItem,
+  type ItemInput,
+  type Wallet,
 } from '@/db/queries';
-import { formatDateID, isValidISODate, todayISO } from '@/lib/dates';
+import { isValidISODate, todayISO } from '@/lib/dates';
 import { newId } from '@/lib/id';
-import { formatRupiah, isReasonableAmount } from '@/lib/money';
 import { MAX_AMOUNT } from '@/lib/defaults';
+import { formatRupiah, isReasonableAmount } from '@/lib/money';
 import { ocrUnavailableMessage, recognizeText } from '@/ocr/recognize';
-import { parseReceipt } from '@/ocr/parse';
+import { parseReceipt, type ParsedReceipt } from '@/ocr/parse';
 import { saveReceiptPhoto } from '@/storage/images';
+import type { ReceiptData } from '@/receipt/build';
 import { useApp } from '@/state/app';
 import { radii, space, useTheme } from '@/theme';
 import {
@@ -39,20 +44,27 @@ import {
   DateField,
   Field,
   MoneyInput,
+  PressableScale,
   Screen,
   ScreenHeader,
   SectionTitle,
   Txt,
 } from '@/ui/components';
 
+type DraftItem = { key: string; name: string; qty: number; price: number };
+
+function toDraft(items: { id: string; name: string; qty: number; price: number }[]): DraftItem[] {
+  return items.map((item) => ({ key: item.id, name: item.name, qty: item.qty || 1, price: item.price }));
+}
+
 export default function ReviewScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ photoUri?: string; expenseId?: string; tripId?: string }>();
+  const params = useLocalSearchParams<{ photoUri?: string; expenseId?: string; walletId?: string }>();
   const { settings, categories, set } = useApp();
 
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [tripId, setTripId] = useState<string | null>(params.tripId ?? null);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [walletId, setWalletId] = useState<string | null>(params.walletId ?? null);
   const [existing, setExisting] = useState<Expense | null>(null);
 
   const [merchant, setMerchant] = useState('');
@@ -61,7 +73,7 @@ export default function ReviewScreen() {
   const [tax, setTax] = useState<number | null>(null);
   const [category, setCategory] = useState(settings.default_category || 'Lain-lain');
   const [note, setNote] = useState('');
-  const [payment, setPayment] = useState('Tunai');
+  const [items, setItems] = useState<DraftItem[]>([]);
   const [photoUri, setPhotoUri] = useState<string | null>(params.photoUri ?? null);
 
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -71,164 +83,187 @@ export default function ReviewScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiMessage, setAiMessage] = useState<string | null>(null);
-  const [diff, setDiff] = useState<{ ai: AiReceipt; local: number | null } | null>(null);
   const [dup, setDup] = useState<DuplicateHit | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<{ id: string; tripId: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: string; walletId: string } | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptItems, setReceiptItems] = useState<ExpenseItem[]>([]);
 
   const booted = useRef(false);
   const dupAcknowledged = useRef(false);
+  const amountTouched = useRef(false);
 
-  const runLocalOcr = useCallback(
+  const subtotal = items.reduce((sum, item) => sum + (item.price || 0) * (item.qty || 1), 0);
+  const hasItems = items.filter((item) => item.name.trim() || item.price > 0).length > 0;
+
+  const applyParsed = (parsed: ParsedReceipt, text: string) => {
+    setOcrText(text);
+    if (parsed.merchant) setMerchant((prev) => prev || parsed.merchant);
+    if (parsed.date) setDate(parsed.date);
+    if (parsed.amount) setAmount(parsed.amount);
+    if (parsed.tax) setTax(parsed.tax);
+    if (parsed.items.length > 0) {
+      setItems(toDraft(parsed.items.map((item) => ({ ...item, id: newId('tmp') }))));
+      amountTouched.current = false;
+    }
+    setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
+    setConfidence(parsed.confidence);
+    setSource('ocr');
+    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Â· ') : null);
+  };
+
+  const applyAi = (ai: AiReceipt) => {
+    if (ai.merchant) setMerchant(ai.merchant);
+    setDate(ai.date);
+    setAmount(ai.total);
+    setTax(ai.tax || null);
+    setCategory(ai.category);
+    setConfidence(ai.confidence);
+    setSource('ai');
+    setAiJson(JSON.stringify(ai));
+    amountTouched.current = false;
+    if (ai.items.length > 0) {
+      setItems(ai.items.map((item) => ({ key: newId('tmp'), name: item.name, qty: item.qty || 1, price: item.price })));
+    }
+    setNotice(`Dibaca Gemini Â· keyakinan ${ai.confidence}%`);
+  };
+
+  const readWithAi = useCallback(
+    async (uri: string, localText: string | null) => {
+      setAiBusy(true);
+      const model = settings.ai_model || 'gemini-3.5-flash-lite';
+      try {
+        const { receipt, usage } = await askGemini({ imageUri: uri, ocrText: localText, model, categories });
+        await logAiUsage({ model, ok: true, tokensIn: usage.tokensIn, tokensOut: usage.tokensOut });
+        applyAi(receipt);
+      } catch (error) {
+        await logAiUsage({ model, ok: false, error: error instanceof Error ? error.message : String(error) });
+        setNotice(aiErrorMessage(error));
+      } finally {
+        setAiBusy(false);
+      }
+    },
+    [settings.ai_model, categories],
+  );
+
+  const readPhoto = useCallback(
     async (uri: string) => {
       setReading(true);
-      setAiMessage(null);
       const text = await recognizeText(uri);
       setReading(false);
-      if (!text) {
+      if (text) {
+        const parsed = parseReceipt(text);
+        applyParsed(parsed, text);
+      } else {
         setNotice(ocrUnavailableMessage());
+      }
+
+      const key = await getApiKey();
+      if (!key) return;
+      if (settings.ai_auto !== '1') return;
+
+      if (!settings.ai_consent_at) {
+        Alert.alert(
+          'Baca struk dengan Gemini?',
+          'Foto struk dikirim langsung dari HP ke Google memakai kunci API milikmu. Lanjut?',
+          [
+            { text: 'Nanti', style: 'cancel' },
+            {
+              text: 'Boleh',
+              onPress: async () => {
+                await set('ai_consent_at', new Date().toISOString());
+                await readWithAi(uri, text);
+              },
+            },
+          ],
+        );
         return;
       }
-      setOcrText(text);
-      const parsed = parseReceipt(text);
-      if (parsed.merchant) setMerchant((prev) => prev || parsed.merchant);
-      if (parsed.date) setDate(parsed.date);
-      if (parsed.amount) setAmount(parsed.amount);
-      if (parsed.tax) setTax(parsed.tax);
-      if (parsed.amount || parsed.merchant) {
-        setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
-        setSource('ocr');
-        setConfidence(parsed.confidence);
-      }
-      setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' · ') : null);
+      await readWithAi(uri, text);
     },
-    [],
+    [readWithAi, settings.ai_auto, settings.ai_consent_at, set],
   );
 
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
     (async () => {
-      let allTrips = await listTrips();
-      if (allTrips.length === 0) {
-        const created = await ensureDefaultTrip();
-        allTrips = [created];
+      let list = await listWallets();
+      if (list.length === 0) {
+        const created = await ensureDefaultWallet();
+        list = [created];
       }
-      setTrips(allTrips);
+      setWallets(list);
 
       if (params.expenseId) {
         const expense = await getExpense(params.expenseId);
         if (expense) {
           setExisting(expense);
-          setTripId(expense.tripId);
+          setWalletId(expense.walletId);
           setMerchant(expense.merchant);
           setDate(expense.date);
           setAmount(expense.amount);
           setTax(expense.tax || null);
           setCategory(expense.category);
           setNote(expense.note ?? '');
-          setPayment(expense.paymentMethod ?? 'Tunai');
           setPhotoUri(expense.receiptPath);
           setOcrText(expense.ocrText);
           setAiJson(expense.aiJson);
           setSource(expense.source);
           setConfidence(expense.confidence);
+          const savedItems = await listItems(expense.id);
+          setItems(toDraft(savedItems));
+          setReceiptItems(savedItems);
         }
         return;
       }
 
-      if (!params.tripId) {
-        const current = await activeTrip();
-        setTripId(current?.id ?? allTrips[0]?.id ?? null);
+      if (!params.walletId) {
+        const recent = await recentWalletId();
+        setWalletId(recent ?? list[0]?.id ?? null);
       }
-      if (params.photoUri) await runLocalOcr(params.photoUri);
-    })().catch((error) => {
-      setNotice((error as Error).message);
-    });
-  }, [params.expenseId, params.photoUri, params.tripId, runLocalOcr]);
-
-  const applyAi = (ai: AiReceipt, keepAmount?: boolean) => {
-    if (ai.merchant) setMerchant(ai.merchant);
-    setDate(ai.date);
-    if (!keepAmount) setAmount(ai.total);
-    setTax(ai.tax || null);
-    setCategory(ai.category);
-    setConfidence(ai.confidence);
-    setSource('ai');
-    setAiJson(JSON.stringify(ai));
-    setAiMessage(`Dibaca AI dengan keyakinan ${ai.confidence}%. Periksa lagi nominalnya.`);
-  };
-
-  const confirmConsent = () =>
-    new Promise<boolean>((resolve) => {
-      Alert.alert(
-        'Kirim foto ke Google?',
-        'Foto struk ini akan dikirim langsung dari HP ke Gemini untuk dibaca. Tidak ada server perantara. Lanjut?',
-        [
-          { text: 'Batal', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Lanjut', onPress: () => resolve(true) },
-        ],
-        { cancelable: true, onDismiss: () => resolve(false) },
-      );
-    });
-
-  const askAi = async () => {
-    if (!photoUri) return;
-    setAiMessage(null);
-
-    if (!settings.ai_consent_at) {
-      const ok = await confirmConsent();
-      if (!ok) return;
-      await set('ai_consent_at', new Date().toISOString());
-    }
-
-    setAiBusy(true);
-    const model = settings.ai_model || 'gemini-3.5-flash-lite';
-    try {
-      const { receipt, usage } = await askGemini({
-        imageUri: photoUri,
-        ocrText,
-        model,
-        categories,
-      });
-      await logAiUsage({
-        model,
-        ok: true,
-        tokensIn: usage.tokensIn,
-        tokensOut: usage.tokensOut,
-      });
-      if (amount != null && Math.abs(receipt.total - amount) / receipt.total > 0.05) {
-        setDiff({ ai: receipt, local: amount });
-      } else {
-        applyAi(receipt);
-      }
-    } catch (error) {
-      await logAiUsage({
-        model,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      setAiMessage(aiErrorMessage(error));
-    } finally {
-      setAiBusy(false);
-    }
-  };
+      if (params.photoUri) await readPhoto(params.photoUri);
+    })().catch((error) => setNotice((error as Error).message));
+  }, [params.expenseId, params.photoUri, params.walletId, readPhoto]);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (result.canceled || !result.assets?.[0]) return;
     setPhotoUri(result.assets[0].uri);
-    await runLocalOcr(result.assets[0].uri);
+    await readPhoto(result.assets[0].uri);
+  };
+
+  const updateItem = (key: string, patch: Partial<DraftItem>) => {
+    setItems((prev) => {
+      const next = prev.map((item) => (item.key === key ? { ...item, ...patch } : item));
+      if (!amountTouched.current) {
+        const sum = next.reduce((total, item) => total + (item.price || 0) * (item.qty || 1), 0);
+        setAmount(sum > 0 ? sum + (tax ?? 0) : null);
+      }
+      return next;
+    });
+  };
+
+  const addItem = () => {
+    setItems((prev) => [...prev, { key: newId('tmp'), name: '', qty: 1, price: 0 }]);
+  };
+
+  const removeItem = (key: string) => {
+    setItems((prev) => {
+      const next = prev.filter((item) => item.key !== key);
+      if (!amountTouched.current) {
+        const sum = next.reduce((total, item) => total + (item.price || 0) * (item.qty || 1), 0);
+        setAmount(sum > 0 ? sum + (tax ?? 0) : null);
+      }
+      return next;
+    });
   };
 
   const validate = (): string | null => {
-    if (!merchant.trim()) return 'Nama toko atau keterangan wajib diisi.';
-    if (!isReasonableAmount(amount)) return `Nominal harus antara Rp 1 dan ${formatRupiah(MAX_AMOUNT)}.`;
-    if (!isValidISODate(date)) return 'Tanggal belum benar. Format YYYY-MM-DD.';
-    if (!tripId) return 'Pilih dinas dulu.';
-    if (tax != null && tax < 0) return 'Pajak tidak boleh negatif.';
-    if (tax != null && amount != null && tax > amount * 0.15) return 'Pajak terlihat terlalu besar. Periksa lagi.';
+    if (!merchant.trim()) return 'Nama toko wajib diisi.';
+    if (!isReasonableAmount(amount)) return `Total harus antara Rp 1 dan ${formatRupiah(MAX_AMOUNT)}.`;
+    if (!isValidISODate(date)) return 'Tanggal belum benar.';
+    if (!walletId) return 'Pilih dompet dulu.';
     return null;
   };
 
@@ -247,28 +282,33 @@ export default function ReviewScreen() {
         receiptHash = photo.hash;
       }
 
+      const payloadItems: ItemInput[] = items
+        .filter((item) => item.name.trim() && item.price > 0)
+        .map((item) => ({ name: item.name, qty: item.qty || 1, price: item.price }));
+
       const payload = {
-        tripId: tripId as string,
+        walletId: walletId as string,
         merchant: merchant.trim(),
         date,
         amount: amount as number,
+        subtotal: hasItems ? subtotal : null,
         tax: tax ?? 0,
         category,
         note: note.trim() || null,
-        paymentMethod: payment.trim() || null,
         receiptPath,
         thumbPath,
         receiptHash,
         ocrText,
-        aiJson: aiJson ?? existing?.aiJson ?? null,
+        aiJson,
         source,
         confidence,
+        items: payloadItems,
       };
 
       if (existing) await updateExpense(id, payload);
       else await createExpense(payload);
 
-      setSaved({ id, tripId: tripId as string });
+      setSaved({ id, walletId: walletId as string });
     } catch (error) {
       Alert.alert('Gagal menyimpan', (error as Error).message);
     } finally {
@@ -282,11 +322,6 @@ export default function ReviewScreen() {
       Alert.alert('Belum bisa disimpan', error);
       return;
     }
-    if (settings.require_photo === '1' && !photoUri) {
-      Alert.alert('Foto struk wajib', 'Pengaturan kamu mewajibkan foto. Lampirkan dulu, atau ubah di Pengaturan.');
-      return;
-    }
-
     if (!dupAcknowledged.current) {
       let hash: string | null = null;
       if (photoUri && photoUri !== existing?.receiptPath) {
@@ -296,13 +331,7 @@ export default function ReviewScreen() {
           hash = null;
         }
       }
-      const found = await findDuplicate({
-        amount: amount as number,
-        date,
-        merchant,
-        hash,
-        excludeId: existing?.id,
-      });
+      const found = await findDuplicate({ amount: amount as number, date, merchant, hash, excludeId: existing?.id });
       if (found) {
         setDup(found);
         return;
@@ -313,7 +342,7 @@ export default function ReviewScreen() {
 
   const remove = () => {
     if (!existing) return;
-    Alert.alert('Hapus biaya ini?', 'Masih bisa dipulihkan dari Sampah selama 30 hari.', [
+    Alert.alert('Hapus catatan?', 'Masih bisa dipulihkan dari Sampah.', [
       { text: 'Batal', style: 'cancel' },
       {
         text: 'Hapus',
@@ -326,82 +355,234 @@ export default function ReviewScreen() {
     ]);
   };
 
-  const photo = photoUri;
-  const lowConfidence = confidence != null && confidence < 60;
+  const wallet = wallets.find((item) => item.id === walletId) ?? wallets[0];
+  const receiptData: ReceiptData[] | null =
+    existing && wallet
+      ? [{ wallet, expense: existing, items: receiptItems, settings }]
+      : null;
 
   return (
-    <Screen edges={['top']} footer={<AppButton title={existing ? 'Simpan perubahan' : 'Simpan biaya'} icon="checkmark" loading={saving} onPress={save} />}>
+    <Screen
+      edges={['top']}
+      footer={
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <AppButton
+            title={existing ? 'Simpan perubahan' : 'Simpan struk'}
+            icon="checkmark"
+            loading={saving}
+            onPress={save}
+            style={{ flex: 1 }}
+          />
+          {existing ? (
+            <AppButton title="Struk" icon="receipt-outline" variant="secondary" onPress={() => setReceiptOpen(true)} />
+          ) : null}
+        </View>
+      }>
       <ScreenHeader
-        title={existing ? 'Ubah biaya' : 'Catat biaya'}
-        subtitle={reading ? 'Membaca struk…' : existing ? 'Perubahan tersimpan lokal' : 'Periksa sebelum simpan'}
+        title={existing ? 'Ubah struk' : 'Periksa struk'}
+        subtitle={aiBusy ? 'Gemini membacaâ€¦' : reading ? 'Membaca strukâ€¦' : 'Semua kolom bisa diedit'}
         onBack={() => router.back()}
       />
 
-      {photo ? (
-        <View style={{ borderRadius: radii.lg, overflow: 'hidden', backgroundColor: theme.cardAlt }}>
-          <Image source={{ uri: photo }} style={{ width: '100%', height: 190 }} contentFit="cover" />
-          <View style={{ position: 'absolute', bottom: space.sm, right: space.sm, flexDirection: 'row', gap: space.sm }}>
-            <Pressable
-              onPress={pickPhoto}
+      <Card style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
+        <PressableScale onPress={pickPhoto} haptic="selection" accessibilityLabel="Ganti foto">
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={{ width: 82, height: 108, borderRadius: radii.md, backgroundColor: theme.cardAlt }}
+              contentFit="cover"
+            />
+          ) : (
+            <View
               style={{
-                flexDirection: 'row',
+                width: 82,
+                height: 108,
+                borderRadius: radii.md,
+                backgroundColor: theme.cardAlt,
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: 4,
-                backgroundColor: 'rgba(17,24,39,0.72)',
-                paddingHorizontal: 10,
-                paddingVertical: 7,
-                borderRadius: radii.pill,
               }}>
-              <Ionicons name="swap-horizontal" size={14} color="#FFFFFF" />
-              <Txt variant="small" color="#FFFFFF">
-                Ganti
+              <Ionicons name="camera-outline" size={22} color={theme.textMuted} />
+              <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
+                Foto
               </Txt>
-            </Pressable>
+            </View>
+          )}
+        </PressableScale>
+
+        <View style={{ flex: 1, gap: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+            <Badge
+              label={source === 'ai' ? 'Gemini' : source === 'ocr' ? 'OCR lokal' : 'Manual'}
+              tone={source === 'ai' ? 'success' : 'neutral'}
+            />
+            {confidence != null ? (
+              <Badge label={`${confidence}%`} tone={confidence < 60 ? 'warning' : 'success'} />
+            ) : null}
           </View>
-        </View>
-      ) : (
-        <AppButton title="Lampirkan foto struk" icon="images-outline" variant="secondary" onPress={pickPhoto} />
-      )}
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm }}>
-        {source === 'ocr' ? <Badge label="OCR lokal" tone="neutral" /> : null}
-        {source === 'ai' ? <Badge label="Dibaca AI" tone="success" /> : null}
-        {source === 'manual' ? <Badge label="Manual" tone="neutral" /> : null}
-        {confidence != null ? (
-          <Badge label={`Keyakinan ${confidence}%`} tone={lowConfidence ? 'warning' : 'success'} />
-        ) : null}
-        {existing?.status === 'terkirim' ? <Badge label="Sudah terkirim" tone="success" /> : null}
-      </View>
-
-      {notice ? (
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <Ionicons name="information-circle-outline" size={15} color={theme.warning} style={{ marginTop: 1 }} />
-          <Txt variant="small" color={theme.warning} style={{ flex: 1 }}>
-            {notice}
+          <Txt variant="small" color={theme.textMuted} numberOfLines={2}>
+            {notice ?? 'Foto struk tetap jadi bukti walau angkanya kamu koreksi.'}
           </Txt>
+          {aiBusy ? (
+            <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
+              Menyalin item satu per satuâ€¦
+            </Txt>
+          ) : null}
         </View>
-      ) : null}
+      </Card>
 
-      <TripPicker
-        trips={trips}
-        value={tripId}
-        onChange={setTripId}
-        onCreated={(trip) => {
-          setTrips((prev) => [trip, ...prev]);
-          setTripId(trip.id);
+      <Card style={{ gap: space.lg }}>
+        <Field
+          label="Nama toko"
+          value={merchant}
+          onChangeText={setMerchant}
+          placeholder="Warung Padang"
+        />
+        <DateField label="Tanggal" value={date} onChange={setDate} />
+      </Card>
+
+      <WalletPicker
+        wallets={wallets}
+        value={walletId}
+        onChange={setWalletId}
+        onCreated={(created) => {
+          setWallets((prev) => [...prev, created]);
+          setWalletId(created.id);
         }}
       />
 
-      <Field
-        label="Toko / keterangan"
-        value={merchant}
-        onChangeText={setMerchant}
-        placeholder="Nama restoran, toko, atau keterangan biaya"
-      />
+      <View style={{ gap: space.sm }}>
+        <SectionTitle
+          right={
+            <PressableScale onPress={addItem} haptic="selection">
+              <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+                + Tambah
+              </Txt>
+            </PressableScale>
+          }>
+          Item ({items.length})
+        </SectionTitle>
 
-      <MoneyInput label="Nominal" value={amount} onChange={setAmount} />
+        <Card padded={false} style={{ paddingHorizontal: space.md, paddingVertical: space.xs }}>
+          {items.length === 0 ? (
+            <View style={{ padding: space.lg, alignItems: 'center', gap: 4 }}>
+              <Txt variant="small" color={theme.textMuted}>
+                Belum ada item. Foto struk atau tambah manual.
+              </Txt>
+            </View>
+          ) : (
+            items.map((item, index) => (
+              <View key={item.key}>
+                {index > 0 ? <View style={{ height: 1, backgroundColor: theme.border }} /> : null}
+                <View style={{ paddingVertical: 10, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                    <TextInput
+                      value={item.name}
+                      onChangeText={(text) => updateItem(item.key, { name: text })}
+                      placeholder="Nama item"
+                      placeholderTextColor={theme.textMuted}
+                      style={{
+                        flex: 1,
+                        color: theme.text,
+                        fontSize: 14,
+                        fontWeight: '600',
+                        paddingVertical: 4,
+                      }}
+                    />
+                    <PressableScale onPress={() => removeItem(item.key)} accessibilityLabel="Hapus item" haptic="selection">
+                      <Ionicons name="close" size={17} color={theme.danger} />
+                    </PressableScale>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <PressableScale
+                        onPress={() => updateItem(item.key, { qty: Math.max(1, (item.qty || 1) - 1) })}
+                        haptic="selection"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 8,
+                          backgroundColor: theme.cardAlt,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                        <Ionicons name="remove" size={13} color={theme.textMuted} />
+                      </PressableScale>
+                      <Txt variant="small" style={{ minWidth: 18, textAlign: 'center' }}>
+                        {item.qty || 1}
+                      </Txt>
+                      <PressableScale
+                        onPress={() => updateItem(item.key, { qty: (item.qty || 1) + 1 })}
+                        haptic="selection"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 8,
+                          backgroundColor: theme.cardAlt,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                        <Ionicons name="add" size={13} color={theme.textMuted} />
+                      </PressableScale>
+                    </View>
+                    <View style={{ flex: 1 }} />
+                    <View style={{ width: 120 }}>
+                      <MoneyInput
+                        compact
+                        value={item.price || null}
+                        onChange={(value) => updateItem(item.key, { price: value ?? 0 })}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </Card>
 
-      <DateField label="Tanggal struk" value={date} onChange={setDate} />
+        <PressableScale
+          onPress={addItem}
+          haptic="selection"
+          style={{
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: theme.border,
+            borderRadius: radii.lg,
+            paddingVertical: space.md,
+            alignItems: 'center',
+          }}>
+          <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+            + Tambah item
+          </Txt>
+        </PressableScale>
+      </View>
+
+      <Card style={{ gap: space.md }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Txt variant="small" color={theme.textMuted}>
+            Subtotal item
+          </Txt>
+          <Txt variant="section">{formatRupiah(subtotal)}</Txt>
+        </View>
+        <MoneyInput
+          label="Pajak (opsional)"
+          value={tax}
+          onChange={(value) => {
+            setTax(value);
+            if (!amountTouched.current && subtotal > 0) setAmount(subtotal + (value ?? 0));
+          }}
+        />
+        <MoneyInput
+          label="Total dibayar"
+          value={amount}
+          onChange={(value) => {
+            amountTouched.current = true;
+            setAmount(value);
+          }}
+          hint="Otomatis dari item. Ubah kalau ada diskon atau pembulatan."
+        />
+      </Card>
 
       <View style={{ gap: space.sm }}>
         <SectionTitle>Kategori</SectionTitle>
@@ -412,69 +593,27 @@ export default function ReviewScreen() {
         </View>
       </View>
 
-      <View style={{ gap: space.sm }}>
-        <SectionTitle>Pembayaran</SectionTitle>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          {['Tunai', 'Transfer', 'Kartu'].map((item) => (
-            <Chip key={item} label={item} selected={payment === item} onPress={() => setPayment(item)} />
-          ))}
-        </View>
-      </View>
+      <Field label="Catatan (opsional)" value={note} onChangeText={setNote} placeholder="Jamuan klien" multiline />
 
-      <MoneyInput
-        label="Pajak (opsional)"
-        value={tax}
-        onChange={setTax}
-        hint="Isi hanya kalau tertulis di struk. Tidak ditambahkan ke total."
-      />
+      {existing ? <AppButton title="Hapus catatan" variant="ghost" icon="trash-outline" onPress={remove} /> : null}
 
-      <Field
-        label="Catatan (opsional)"
-        value={note}
-        onChangeText={setNote}
-        placeholder="Misal: jamuan klien PT ABC"
-        multiline
-      />
-
-      {photo ? (
-        <Card style={{ gap: space.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <Ionicons name="sparkles-outline" size={18} color={theme.primary} />
-            <Txt variant="section" style={{ flex: 1 }}>
-              Baca ulang dengan AI
-            </Txt>
-          </View>
-          <Txt variant="small" color={theme.textMuted}>
-            Kirim foto ke Gemini kalau hasil baca lokal kurang yakin. Pakai kunci API milikmu sendiri.
-          </Txt>
-          <AppButton
-            title={lowConfidence ? 'Coba baca dengan AI' : 'Baca ulang dengan AI'}
-            icon="sparkles"
-            variant={lowConfidence ? 'primary' : 'secondary'}
-            compact
-            loading={aiBusy}
-            onPress={askAi}
-          />
-          {aiMessage ? (
-            <Txt variant="small" color={theme.textMuted}>
-              {aiMessage}
-            </Txt>
-          ) : null}
-        </Card>
-      ) : null}
-
-      {existing ? (
-        <AppButton title="Hapus biaya" variant="ghost" icon="trash-outline" onPress={remove} />
+      {receiptData ? (
+        <ReceiptSheet
+          visible={receiptOpen}
+          receipts={receiptData}
+          walletName={wallet?.name ?? 'Dompet'}
+          onClose={() => setReceiptOpen(false)}
+        />
       ) : null}
 
       <Modal visible={saved !== null} transparent animationType="fade" onRequestClose={() => setSaved(null)}>
         <View style={{ flex: 1, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
-          <View style={{ backgroundColor: theme.card, borderRadius: radii.xl, padding: space.xl, gap: space.md, width: '100%', maxWidth: 380 }}>
+          <View style={{ backgroundColor: theme.card, borderRadius: radii.xxl, padding: space.xl, gap: space.md, width: '100%', maxWidth: 380 }}>
             <View style={{ alignItems: 'center', gap: space.sm }}>
-              <Ionicons name="checkmark-circle" size={44} color={theme.success} />
+              <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
               <Txt variant="title">Tersimpan</Txt>
               <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-                {merchant} · {formatRupiah(amount ?? 0)} · {formatDateID(date)}
+                {merchant} Â· {formatRupiah(amount ?? 0)}
               </Txt>
             </View>
             <AppButton
@@ -486,42 +625,33 @@ export default function ReviewScreen() {
               }}
             />
             <AppButton
-              title="Buka dinas"
+              title="Buka dompet"
               variant="secondary"
               onPress={() => {
                 const target = saved;
                 setSaved(null);
-                if (target) router.replace({ pathname: '/trip/[id]', params: { id: target.tripId } });
+                if (target) router.replace({ pathname: '/wallet/[id]', params: { id: target.walletId } });
               }}
             />
-            <AppButton
-              title="Selesai"
-              variant="ghost"
-              onPress={() => {
-                setSaved(null);
-                router.back();
-              }}
-            />
+            <AppButton title="Selesai" variant="ghost" onPress={() => { setSaved(null); router.back(); }} />
           </View>
         </View>
       </Modal>
 
       <Modal visible={dup !== null} transparent animationType="fade" onRequestClose={() => setDup(null)}>
         <View style={{ flex: 1, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
-          <View style={{ backgroundColor: theme.card, borderRadius: radii.xl, padding: space.xl, gap: space.md, width: '100%', maxWidth: 380 }}>
+          <View style={{ backgroundColor: theme.card, borderRadius: radii.xxl, padding: space.xl, gap: space.md, width: '100%', maxWidth: 380 }}>
             <Txt variant="title">Mungkin duplikat</Txt>
             <Txt variant="small" color={theme.textMuted}>
-              {dup?.samePhoto
-                ? 'Foto ini pernah dicatat sebelumnya.'
-                : 'Ada biaya dengan nominal dan tanggal yang mirip.'}
+              {dup?.samePhoto ? 'Foto ini pernah dicatat.' : 'Ada catatan dengan nominal dan tanggal mirip.'}
             </Txt>
             {dup ? (
-              <Card style={{ backgroundColor: theme.cardAlt }}>
+              <Card style={{ backgroundColor: theme.cardAlt, borderColor: theme.cardAlt }}>
                 <Txt variant="body" style={{ fontWeight: '600' }}>
                   {dup.expense.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted}>
-                  {formatDateID(dup.expense.date)} · {formatRupiah(dup.expense.amount)}
+                  {dup.expense.date} Â· {formatRupiah(dup.expense.amount)}
                 </Txt>
               </Card>
             ) : null}
@@ -533,45 +663,12 @@ export default function ReviewScreen() {
                 await persist();
               }}
             />
-            <AppButton
-              title="Batal"
-              variant="secondary"
-              onPress={() => setDup(null)}
-            />
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={diff !== null} transparent animationType="fade" onRequestClose={() => setDiff(null)}>
-        <View style={{ flex: 1, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center', padding: space.xl }}>
-          <View style={{ backgroundColor: theme.card, borderRadius: radii.xl, padding: space.xl, gap: space.md, width: '100%', maxWidth: 380 }}>
-            <Txt variant="title">Nominal berbeda</Txt>
-            <Txt variant="small" color={theme.textMuted}>
-              Hasil AI dan hasil baca lokal tidak sama. Pilih yang menurutmu benar.
-            </Txt>
-            {diff ? (
-              <>
-                <Card style={{ backgroundColor: theme.primarySoft }} onPress={() => { applyAi(diff.ai); setDiff(null); }}>
-                  <Txt variant="small" color={theme.textMuted}>
-                    Hasil AI
-                  </Txt>
-                  <Txt variant="title">{formatRupiah(diff.ai.total)}</Txt>
-                </Card>
-                <Card
-                  onPress={() => {
-                    applyAi(diff.ai, true);
-                    setDiff(null);
-                  }}>
-                  <Txt variant="small" color={theme.textMuted}>
-                    Hasil lokal / isianmu
-                  </Txt>
-                  <Txt variant="title">{formatRupiah(diff.local ?? 0)}</Txt>
-                </Card>
-              </>
-            ) : null}
+            <AppButton title="Batal" variant="secondary" onPress={() => setDup(null)} />
           </View>
         </View>
       </Modal>
     </Screen>
   );
 }
+
+

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /**
  * Semua migrasi berurutan. Tambah entri baru di akhir; jangan ubah entri lama,
@@ -62,5 +62,66 @@ export const MIGRATIONS: string[][] = [
     `CREATE INDEX IF NOT EXISTS idx_expenses_deleted ON expenses(deleted_at);`,
     `CREATE INDEX IF NOT EXISTS idx_expenses_hash ON expenses(receipt_hash);`,
     `CREATE INDEX IF NOT EXISTS idx_ai_usage_at ON ai_usage(at);`,
+  ],
+  [
+    // Dompet menggantikan dinas. Tabel trips dibiarkan (tidak dipakai) agar data lama aman.
+    `CREATE TABLE IF NOT EXISTS wallets (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#0E7C5F',
+      budget INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `INSERT OR IGNORE INTO wallets (id, name, color, budget, created_at, updated_at)
+      SELECT id, name, '#0E7C5F', budget, created_at, updated_at FROM trips;`,
+    // expenses dibangun ulang: trip_id nullable tidak cukup, kolomnya NOT NULL dan ber-FK.
+    `CREATE TABLE expenses_v2 (
+      id TEXT PRIMARY KEY NOT NULL,
+      wallet_id TEXT NOT NULL REFERENCES wallets(id),
+      merchant TEXT NOT NULL,
+      date TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      subtotal INTEGER,
+      tax INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'IDR',
+      rate REAL,
+      category TEXT NOT NULL,
+      note TEXT,
+      payment_method TEXT,
+      receipt_path TEXT,
+      thumb_path TEXT,
+      receipt_hash TEXT,
+      ocr_text TEXT,
+      ai_json TEXT,
+      source TEXT NOT NULL DEFAULT 'manual',
+      confidence INTEGER,
+      status TEXT NOT NULL DEFAULT 'draft',
+      sent_at TEXT,
+      deleted_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`,
+    `INSERT INTO expenses_v2 (id, wallet_id, merchant, date, amount, tax, currency, rate, category, note,
+       payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence,
+       status, sent_at, deleted_at, created_at, updated_at)
+     SELECT id, trip_id, merchant, date, amount, tax, currency, rate, category, note,
+       payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence,
+       status, sent_at, deleted_at, created_at, updated_at FROM expenses;`,
+    `DROP TABLE expenses;`,
+    `ALTER TABLE expenses_v2 RENAME TO expenses;`,
+    `CREATE INDEX IF NOT EXISTS idx_expenses_wallet ON expenses(wallet_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);`,
+    `CREATE INDEX IF NOT EXISTS idx_expenses_deleted ON expenses(deleted_at);`,
+    `CREATE INDEX IF NOT EXISTS idx_expenses_hash ON expenses(receipt_hash);`,
+    `CREATE TABLE IF NOT EXISTS expense_items (
+      id TEXT PRIMARY KEY NOT NULL,
+      expense_id TEXT NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      qty REAL NOT NULL DEFAULT 1,
+      price INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_items_expense ON expense_items(expense_id);`,
   ],
 ];

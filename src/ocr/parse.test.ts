@@ -45,6 +45,7 @@ describe('parseReceipt pada fixture nyata', () => {
       if (exp.amount !== undefined) expect(parsed.amount).toBe(exp.amount);
       if (exp.date !== undefined) expect(parsed.date).toBe(exp.date);
       if (exp.category) expect(parsed.category).toBe(exp.category);
+      if (exp.items !== undefined) expect(parsed.items.length).toBe(exp.items);
       if (exp.minConfidence != null) expect(parsed.confidence).toBeGreaterThanOrEqual(exp.minConfidence);
       if (exp.maxConfidence != null) expect(parsed.confidence).toBeLessThanOrEqual(exp.maxConfidence);
       expect(parsed.confidence).toBeGreaterThanOrEqual(0);
@@ -63,5 +64,20 @@ describe('parseReceipt pada fixture nyata', () => {
     expect(parsed.amount).toBeNull();
     expect(parsed.date).toBeNull();
     expect(parsed.reasons.length).toBeGreaterThan(0);
+  });
+
+  it('membaca item dengan kuantitas dan menghitung subtotal', () => {
+    const parsed = parseReceipt(
+      `BAKSO PAK KARNO
+18/11/2026
+BAKSO JUMBO 2 x 30.000
+ES TEH 2 x 5.000
+TOTAL 70.000`,
+      '2026-11-19',
+    );
+    expect(parsed.items).toHaveLength(2);
+    expect(parsed.items[0]).toMatchObject({ qty: 2, price: 30000 });
+    expect(parsed.subtotal).toBe(70000);
+    expect(parsed.amount).toBe(70000);
   });
 });

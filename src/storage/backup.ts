@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { getDb } from '@/db';
-import { dumpAll, type Expense, type Trip } from '@/db/queries';
+import { dumpAll, type Expense, type ExpenseItem, type Wallet } from '@/db/queries';
 
 const FOLDER = 'backups';
 
@@ -50,13 +50,15 @@ export async function createBackup(): Promise<BackupResult> {
 type BackupData = {
   version?: number;
   exportedAt?: string;
-  trips?: Trip[];
+  wallets?: Wallet[];
+  trips?: { id: string; name: string; budget?: number | null; createdAt?: string; updatedAt?: string }[];
   expenses?: Expense[];
+  items?: ExpenseItem[];
   settings?: Record<string, string>;
 };
 
 export type RestoreResult = {
-  tripsAdded: number;
+  walletsAdded: number;
   expensesAdded: number;
   photosRestored: number;
   skipped: number;
@@ -84,63 +86,70 @@ export async function restoreBackup(zipUri: string): Promise<RestoreResult> {
   } catch {
     throw new Error('Isi backup tidak bisa dibaca.');
   }
-  if (!data || !Array.isArray(data.trips) || !Array.isArray(data.expenses)) {
+  if (!data || !Array.isArray(data.expenses)) {
     throw new Error('Struktur backup tidak dikenali.');
   }
 
+  // Backup versi lama menyimpan "trips"; versi baru "wallets".
+  const wallets: Wallet[] =
+    data.wallets ??
+    (data.trips ?? []).map((trip) => ({
+      id: trip.id,
+      name: trip.name,
+      color: '#0E7C5F',
+      budget: trip.budget ?? null,
+      createdAt: trip.createdAt ?? new Date().toISOString(),
+      updatedAt: trip.updatedAt ?? new Date().toISOString(),
+    }));
+
   const db = await getDb();
   const now = new Date().toISOString();
-  let tripsAdded = 0;
+  let walletsAdded = 0;
   let expensesAdded = 0;
   let photosRestored = 0;
   let skipped = 0;
 
-  const knownTrips = new Set(
-    (await db.getAllAsync<{ id: string }>('SELECT id FROM trips')).map((row) => row.id),
+  const knownWallets = new Set(
+    (await db.getAllAsync<{ id: string }>('SELECT id FROM wallets')).map((row) => row.id),
   );
 
   const receipts = new Directory(Paths.document, 'receipts');
   if (!receipts.exists) receipts.create({ idempotent: true, intermediates: true });
 
   await db.withExclusiveTransactionAsync(async (txn) => {
-    for (const trip of data.trips ?? []) {
-      if (!trip?.id || !trip.name) {
+    for (const wallet of wallets) {
+      if (!wallet?.id || !wallet.name) {
         skipped += 1;
         continue;
       }
       const result = await txn.runAsync(
-        `INSERT OR IGNORE INTO trips (id, name, city, purpose, ref_no, start_date, end_date, budget, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO wallets (id, name, color, budget, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          trip.id,
-          trip.name,
-          trip.city ?? null,
-          trip.purpose ?? null,
-          trip.refNo ?? null,
-          trip.startDate ?? now.slice(0, 10),
-          trip.endDate ?? now.slice(0, 10),
-          trip.budget ?? null,
-          trip.status ?? 'open',
-          trip.createdAt ?? now,
-          trip.updatedAt ?? now,
+          wallet.id,
+          wallet.name,
+          wallet.color ?? '#0E7C5F',
+          wallet.budget ?? null,
+          wallet.createdAt ?? now,
+          wallet.updatedAt ?? now,
         ],
       );
-      if (result.changes > 0) tripsAdded += 1;
-      knownTrips.add(trip.id);
+      if (result.changes > 0) walletsAdded += 1;
+      knownWallets.add(wallet.id);
     }
 
     for (const expense of data.expenses ?? []) {
-      if (!expense?.id || !expense.tripId || !expense.amount) {
+      const walletId = expense?.walletId ?? (expense as unknown as { tripId?: string })?.tripId;
+      if (!expense?.id || !walletId || !expense.amount) {
         skipped += 1;
         continue;
       }
-      if (!knownTrips.has(expense.tripId)) {
-        // Dinas tidak ada di backup maupun di perangkat: lewati, jangan langgar foreign key.
+      if (!knownWallets.has(walletId)) {
         skipped += 1;
         continue;
       }
+
       let receiptPath: string | null = null;
-      let thumbPath: string | null = null;
       const photo = unzipped[`images/${expense.id}.jpg`];
       if (photo) {
         try {
@@ -154,16 +163,18 @@ export async function restoreBackup(zipUri: string): Promise<RestoreResult> {
       }
 
       const result = await txn.runAsync(
-        `INSERT OR IGNORE INTO expenses (id, trip_id, merchant, date, amount, tax, currency, rate, category,
-           note, payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source,
-           confidence, status, sent_at, deleted_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO expenses (id, wallet_id, merchant, date, amount, subtotal, tax,
+           currency, rate, category, note, payment_method, receipt_path, thumb_path, receipt_hash,
+           ocr_text, ai_json, source, confidence, status, sent_at, deleted_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           expense.id,
-          expense.tripId,
+          walletId,
+          walletId,
           expense.merchant ?? 'Tanpa nama',
           expense.date ?? now.slice(0, 10),
           expense.amount,
+          expense.subtotal ?? null,
           expense.tax ?? 0,
           expense.currency ?? 'IDR',
           expense.rate ?? null,
@@ -171,7 +182,7 @@ export async function restoreBackup(zipUri: string): Promise<RestoreResult> {
           expense.note ?? null,
           expense.paymentMethod ?? null,
           receiptPath,
-          thumbPath,
+          null,
           expense.receiptHash ?? null,
           expense.ocrText ?? null,
           expense.aiJson ?? null,
@@ -187,18 +198,25 @@ export async function restoreBackup(zipUri: string): Promise<RestoreResult> {
       if (result.changes > 0) expensesAdded += 1;
     }
 
+    for (const item of data.items ?? []) {
+      if (!item?.id || !item.expenseId || !item.name) continue;
+      await txn.runAsync(
+        `INSERT OR IGNORE INTO expense_items (id, expense_id, name, qty, price, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [item.id, item.expenseId, item.name, item.qty ?? 1, item.price ?? 0, item.sortOrder ?? 0],
+      );
+    }
+
     for (const [key, value] of Object.entries(data.settings ?? {})) {
       if (typeof value !== 'string') continue;
-      await txn.runAsync(
-        'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
-        [key, value],
-      );
+      await txn.runAsync('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', [key, value]);
     }
   });
 
-  return { tripsAdded, expensesAdded, photosRestored, skipped };
+  return { walletsAdded, expensesAdded, photosRestored, skipped };
 }
 
 export function backupFileName(): string {
   return `notaku-${new Date().toISOString().slice(0, 10)}.zip`;
 }
+

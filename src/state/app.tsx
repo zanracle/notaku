@@ -165,7 +165,7 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
             width: 72,
             height: 72,
             borderRadius: 36,
-            backgroundColor: theme.primarySoft,
+            backgroundColor: theme.mint,
             alignItems: 'center',
             justifyContent: 'center',
           }}>

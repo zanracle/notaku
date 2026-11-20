@@ -27,14 +27,17 @@ export class AiError extends Error {
   }
 }
 
+export type AiItem = { name: string; qty: number; price: number };
+
 export type AiReceipt = {
   merchant: string;
   date: string;
   total: number;
+  subtotal: number;
   tax: number;
   category: string;
   confidence: number;
-  items: { name: string; price: number }[];
+  items: AiItem[];
 };
 
 export type AiUsage = { tokensIn: number | null; tokensOut: number | null };
@@ -161,17 +164,26 @@ function normalize(data: Record<string, unknown>, categories: string[]): AiRecei
         .map((item) => {
           const obj = item as Record<string, unknown>;
           const price = asNumber(obj?.price) ?? 0;
+          const qtyRaw = asNumber(obj?.qty) ?? 1;
+          const qty = qtyRaw > 0 && qtyRaw <= 99 ? qtyRaw : 1;
           const name = typeof obj?.name === 'string' ? obj.name.trim() : '';
-          return name && price > 0 ? { name: name.slice(0, 60), price } : null;
+          return name && price > 0 ? { name: name.slice(0, 80), qty, price } : null;
         })
-        .filter((item): item is { name: string; price: number } => item !== null)
-        .slice(0, 12)
+        .filter((item): item is AiItem => item !== null)
+        .slice(0, 40)
     : [];
+
+  const subtotalRaw = asNumber(data.subtotal) ?? 0;
+  const subtotal =
+    subtotalRaw > 0 && subtotalRaw <= total
+      ? subtotalRaw
+      : items.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   return {
     merchant: typeof data.merchant === 'string' ? data.merchant.trim().slice(0, 80) : '',
     date,
     total: total as number,
+    subtotal,
     tax,
     category,
     confidence: Math.max(0, Math.min(100, confidenceRaw)),
@@ -272,3 +284,4 @@ export function aiErrorMessage(error: unknown): string {
   if (error instanceof AiError) return error.message;
   return 'AI gagal dipakai. Data manual tetap bisa disimpan.';
 }
+

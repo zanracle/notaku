@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 
 import { radii, space, useTheme } from '@/theme';
@@ -24,6 +25,7 @@ export default function CaptureScreen() {
     if (!cameraRef.current || busy) return;
     setBusy(true);
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (!photo?.uri) throw new Error('Foto kosong');
       openReview(photo.uri);
@@ -39,6 +41,7 @@ export default function CaptureScreen() {
       quality: 0.9,
     });
     if (result.canceled || !result.assets?.[0]) return;
+    Haptics.selectionAsync().catch(() => undefined);
     openReview(result.assets[0].uri);
   };
 
@@ -190,3 +193,4 @@ const StyleSheetAbsolute = {
   right: 0,
   bottom: 0,
 };
+

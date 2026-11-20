@@ -9,6 +9,7 @@ export type Fixture = {
     amount?: number | null;
     date?: string | null;
     category?: string;
+    items?: number;
     minConfidence?: number;
     maxConfidence?: number;
   };
@@ -29,7 +30,7 @@ PPN 2.640
 TOTAL 29.040
 TUNAI 50.000
 KEMBALI 20.960`,
-    expect: { amount: 29040, date: '2026-11-18', category: 'Lain-lain', minConfidence: 80 },
+    expect: { amount: 29040, date: '2026-11-18', category: 'Belanja', items: 3, minConfidence: 80 },
   },
   {
     name: 'total di baris berikutnya',
@@ -40,7 +41,7 @@ NASI AYAM 22.000
 JUMLAH BAYAR
 47.000
 TERIMA KASIH`,
-    expect: { amount: 47000, date: '2026-11-18', category: 'Makan', minConfidence: 70 },
+    expect: { amount: 47000, date: '2026-11-18', category: 'Makan', items: 2, minConfidence: 70 },
   },
   {
     name: 'hanya tunai dan kembali',
@@ -50,7 +51,7 @@ LATTE 28.000
 CROISSANT 17.000
 TUNAI 50.000
 KEMBALI 5.000`,
-    expect: { amount: 45000, date: '2026-11-18', category: 'Makan' },
+    expect: { amount: 45000, date: '2026-11-18', category: 'Makan', items: 2 },
   },
   {
     name: 'tanpa label, ambil angka terbesar di ekor',
@@ -81,7 +82,7 @@ SUBTOTAL 650.000
 SERVICE 65.000
 PPN 78.650
 GRAND TOTAL 793.650`,
-    expect: { amount: 793650, date: '2026-11-17', category: 'Penginapan', minConfidence: 80 },
+    expect: { amount: 793650, date: '2026-11-17', category: 'Penginapan', items: 1, minConfidence: 80 },
   },
   {
     name: 'SPBU pertalite',
@@ -121,7 +122,7 @@ CHANGE 18.000`,
 BUKU TULIS 2 PCS 24.000
 PULPEN 8.000
 TOTAL 32.000`,
-    expect: { amount: 32000, date: '2026-11-18', category: 'ATK' },
+    expect: { amount: 32000, date: '2026-11-18', category: 'ATK', items: 2 },
   },
   {
     name: 'nominal dengan titik ribuan dan ekor koma',
@@ -141,7 +142,7 @@ BAKSO PAK KARNO
 BAKSO JUMBO 2 60.000
 ES TEH 2 8.000
 TOTAL 68.000`,
-    expect: { amount: 68000, date: '2026-11-18', category: 'Makan' },
+    expect: { amount: 68000, date: '2026-11-18', category: 'Makan', items: 2 },
   },
   {
     name: 'total bayar plus tunai dan kembali tidak saling menimpa',

@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated as RNAnimated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,7 +23,7 @@ export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /* ---------------------------------- text ---------------------------------- */
 
-type TextVariant = 'display' | 'title' | 'section' | 'body' | 'small' | 'label';
+type TextVariant = 'display' | 'title' | 'section' | 'body' | 'small' | 'label' | 'amount';
 
 export function Txt({
   children,
@@ -49,6 +51,61 @@ export function Txt({
   );
 }
 
+/* -------------------------------- pressable ------------------------------- */
+
+const AnimatedPressable = RNAnimated.createAnimatedComponent(Pressable);
+
+export function PressableScale({
+  children,
+  onPress,
+  style,
+  haptic = 'none',
+  disabled,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+}: {
+  children?: ReactNode;
+  onPress?: () => void;
+  style?: ViewStyle | ViewStyle[];
+  haptic?: 'none' | 'selection' | 'light' | 'medium';
+  disabled?: boolean;
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button' | 'link';
+}) {
+  const [scale] = useState(() => new RNAnimated.Value(1));
+
+  const animate = (to: number) => {
+    RNAnimated.timing(scale, { toValue: to, duration: 110, useNativeDriver: true }).start();
+  };
+
+  const fire = () => {
+    if (haptic === 'none') return;
+    if (haptic === 'selection') Haptics.selectionAsync().catch(() => undefined);
+    else if (haptic === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  };
+
+  return (
+    <AnimatedPressable
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      disabled={disabled}
+      onPressIn={() => animate(0.97)}
+      onPressOut={() => animate(1)}
+      onPress={() => {
+        fire();
+        onPress?.();
+      }}
+      style={[
+        style as ViewStyle,
+        { transform: [{ scale }] },
+        disabled ? { opacity: 0.5 } : null,
+      ] as never}>
+      {children}
+    </AnimatedPressable>
+  );
+}
+
 /* --------------------------------- screen --------------------------------- */
 
 export function Screen({
@@ -57,29 +114,31 @@ export function Screen({
   padded = true,
   footer,
   edges = ['bottom'],
+  withTabs = false,
 }: {
   children: ReactNode;
   scroll?: boolean;
   padded?: boolean;
   footer?: ReactNode;
   edges?: ('top' | 'bottom')[];
+  withTabs?: boolean;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const bottom = edges.includes('bottom') ? insets.bottom : 0;
+  const bottom = (edges.includes('bottom') ? insets.bottom : 0) + (withTabs ? 74 : 0);
   const content = (
-    <View style={[padded && { paddingHorizontal: space.lg }, { gap: space.md }]}>{children}</View>
+    <View style={[padded && { paddingHorizontal: space.xl }, { gap: space.lg }]}>{children}</View>
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: edges.includes('top') ? insets.top : 0 }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: edges.includes('top') ? insets.top + 6 : 0 }}>
       {scroll ? (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
             paddingTop: space.md,
-            paddingBottom: footer ? space.xl : bottom + 110,
-            gap: space.md,
+            paddingBottom: footer ? space.xl : bottom + 28,
+            gap: space.lg,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
@@ -91,7 +150,7 @@ export function Screen({
       {footer ? (
         <View
           style={{
-            paddingHorizontal: space.lg,
+            paddingHorizontal: space.xl,
             paddingTop: space.md,
             paddingBottom: Math.max(bottom, space.md),
             borderTopWidth: StyleSheet.hairlineWidth,
@@ -110,30 +169,37 @@ export function ScreenHeader({
   subtitle,
   onBack,
   right,
+  large,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   right?: ReactNode;
+  large?: boolean;
 }) {
   const theme = useTheme();
   return (
-    <View style={uiStyles.headerRow}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.xs }}>
       {onBack ? (
-        <Pressable
+        <PressableScale
           onPress={onBack}
-          hitSlop={12}
-          accessibilityRole="button"
+          haptic="selection"
           accessibilityLabel="Kembali"
-          style={({ pressed }) => [
-            uiStyles.iconButton,
-            { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
-          ]}>
-          <Ionicons name="chevron-back" size={20} color={theme.text} />
-        </Pressable>
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 19,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+          }}>
+          <Ionicons name="chevron-back" size={19} color={theme.text} />
+        </PressableScale>
       ) : null}
-      <View style={{ flex: 1 }}>
-        <Txt variant="title" numberOfLines={1}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant={large ? 'display' : 'title'} numberOfLines={1}>
           {title}
         </Txt>
         {subtitle ? (
@@ -163,19 +229,17 @@ export function Card({
   const theme = useTheme();
   const base: ViewStyle = {
     backgroundColor: theme.card,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.xxl,
+    borderWidth: 1,
     borderColor: theme.border,
     padding: padded ? space.lg : 0,
+    boxShadow: theme.shadow,
   };
-  if (!onPress) return <View style={[base, style]}>{children}</View>;
+  if (!onPress) return <View style={[base, style] as ViewStyle[]}>{children}</View>;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [base, style, { opacity: pressed ? 0.75 : 1 }]}>
+    <PressableScale onPress={onPress} haptic="selection" style={[base, style] as ViewStyle[]}>
       {children}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -211,37 +275,33 @@ export function AppButton({
   const off = disabled || loading;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={off}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: Boolean(off), busy: Boolean(loading) }}
-      style={({ pressed }) => [
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: space.sm,
-          backgroundColor: tone.bg,
-          borderColor: tone.border,
-          borderWidth: 1,
-          borderRadius: radii.md,
-          paddingVertical: compact ? 9 : 14,
-          paddingHorizontal: space.lg,
-          minHeight: compact ? 40 : 50,
-          opacity: off ? 0.5 : pressed ? 0.8 : 1,
-        },
-        style,
-      ]}>
+      haptic={variant === 'primary' ? 'medium' : 'selection'}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: space.sm,
+        backgroundColor: tone.bg,
+        borderColor: tone.border,
+        borderWidth: 1,
+        borderRadius: radii.lg,
+        paddingVertical: compact ? 10 : 16,
+        paddingHorizontal: space.xl,
+        minHeight: compact ? 42 : 56,
+        ...(style ?? {}),
+      }}>
       {loading ? (
         <ActivityIndicator size="small" color={tone.fg} />
       ) : icon ? (
         <Ionicons name={icon} size={compact ? 16 : 19} color={tone.fg} />
       ) : null}
-      <Txt variant={compact ? 'small' : 'body'} color={tone.fg} style={{ fontWeight: '600' }}>
+      <Txt variant={compact ? 'small' : 'body'} color={tone.fg} style={{ fontWeight: '700' }}>
         {title}
       </Txt>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -261,7 +321,7 @@ export function Field({
 }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 7 }}>
       <Txt variant="label" color={theme.textMuted}>
         {label}
       </Txt>
@@ -275,7 +335,7 @@ export function Field({
           borderColor: error ? theme.danger : theme.border,
           borderRadius: radii.md,
           paddingHorizontal: space.md,
-          minHeight: 48,
+          minHeight: 52,
         }}>
         <TextInput
           placeholderTextColor={theme.textMuted}
@@ -283,9 +343,9 @@ export function Field({
             flex: 1,
             color: theme.text,
             fontSize: 15,
-            paddingVertical: 12,
+            paddingVertical: 13,
             textAlignVertical: props.multiline ? 'top' : 'center',
-            minHeight: props.multiline ? 84 : undefined,
+            minHeight: props.multiline ? 88 : undefined,
           }}
           {...props}
         />
@@ -310,12 +370,14 @@ export function MoneyInput({
   onChange,
   error,
   hint,
+  compact,
 }: {
-  label: string;
+  label?: string;
   value: number | null;
   onChange: (value: number | null) => void;
   error?: string;
   hint?: string;
+  compact?: boolean;
 }) {
   const theme = useTheme();
   const [text, setText] = useState(value ? groupDigits(value) : '');
@@ -324,9 +386,39 @@ export function MoneyInput({
     setText(value ? groupDigits(value) : '');
   }, [value]);
 
+  if (compact) {
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Txt variant="small" color={theme.textMuted}>
+          Rp
+        </Txt>
+        <TextInput
+          value={text}
+          keyboardType="number-pad"
+          placeholder="0"
+          placeholderTextColor={theme.textMuted}
+          onChangeText={(next) => {
+            const digits = onlyDigits(next).slice(0, 11);
+            setText(groupDigits(digits));
+            onChange(digits ? Number(digits) : null);
+          }}
+          style={{
+            flex: 1,
+            color: theme.text,
+            fontSize: 15,
+            fontWeight: '700',
+            textAlign: 'right',
+            fontVariant: ['tabular-nums'],
+            paddingVertical: 6,
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <Field
-      label={label}
+      label={label ?? 'Nominal'}
       value={text}
       error={error}
       hint={hint}
@@ -364,7 +456,7 @@ export function DateField({
   const yesterday = new Date(today.getTime() - 86_400_000);
 
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 7 }}>
       <Field
         label={label}
         value={value}
@@ -376,7 +468,8 @@ export function DateField({
           const digits = next.replace(/\D/g, '').slice(0, 8);
           let formatted = digits;
           if (digits.length > 4) formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}`;
-          if (digits.length > 6) formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+          if (digits.length > 6)
+            formatted = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
           onChange(formatted);
         }}
       />
@@ -398,43 +491,43 @@ export function Chip({
   selected,
   onPress,
   tone = 'default',
+  color,
 }: {
   label: string;
   selected?: boolean;
   onPress: () => void;
   tone?: 'default' | 'danger';
+  color?: string;
 }) {
   const theme = useTheme();
-  const bg = selected ? (tone === 'danger' ? theme.danger : theme.primary) : theme.card;
-  const fg = selected ? (tone === 'danger' ? '#FFFFFF' : theme.onPrimary) : theme.textMuted;
+  const bg = selected ? (tone === 'danger' ? theme.danger : color ?? theme.primary) : theme.card;
+  const fg = selected ? '#FFFFFF' : theme.textMuted;
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: Boolean(selected) }}
-      style={({ pressed }) => ({
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+      haptic="selection"
+      style={{
+        paddingHorizontal: 14,
+        paddingVertical: 9,
         borderRadius: radii.pill,
         backgroundColor: bg,
         borderWidth: 1,
         borderColor: selected ? bg : theme.border,
-        opacity: pressed ? 0.7 : 1,
-        minHeight: 36,
+        minHeight: 38,
         justifyContent: 'center',
-      })}>
-      <Txt variant="small" color={fg} style={{ fontWeight: '600' }}>
+      }}>
+      <Txt variant="small" color={fg} style={{ fontWeight: '700' }}>
         {label}
       </Txt>
-    </Pressable>
+    </PressableScale>
   );
 }
 
 /* ------------------------------- misc bits -------------------------------- */
 
-export function Divider() {
+export function Divider({ inset = 0 }: { inset?: number }) {
   const theme = useTheme();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border }} />;
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginLeft: inset }} />;
 }
 
 export function EmptyState({
@@ -442,25 +535,27 @@ export function EmptyState({
   title,
   body,
   action,
+  color,
 }: {
   icon?: IconName;
   title: string;
   body?: string;
   action?: ReactNode;
+  color?: string;
 }) {
   const theme = useTheme();
   return (
     <View style={{ alignItems: 'center', gap: space.sm, paddingVertical: space.xxl }}>
       <View
         style={{
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: theme.cardAlt,
+          width: 64,
+          height: 64,
+          borderRadius: 22,
+          backgroundColor: theme.mint,
           alignItems: 'center',
           justifyContent: 'center',
         }}>
-        <Ionicons name={icon} size={26} color={theme.textMuted} />
+        <Ionicons name={icon} size={28} color={color ?? theme.primary} />
       </View>
       <Txt variant="section" style={{ textAlign: 'center' }}>
         {title}
@@ -480,19 +575,20 @@ export function Badge({
   tone = 'neutral',
 }: {
   label: string;
-  tone?: 'neutral' | 'success' | 'warning' | 'danger';
+  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 }) {
   const theme = useTheme();
   const map: Record<string, { bg: string; fg: string }> = {
     neutral: { bg: theme.cardAlt, fg: theme.textMuted },
-    success: { bg: theme.successSoft, fg: theme.success },
-    warning: { bg: theme.warningSoft, fg: theme.warning },
+    success: { bg: theme.mint, fg: theme.primary },
+    warning: { bg: theme.accentSoft, fg: theme.warning },
     danger: { bg: theme.dangerSoft, fg: theme.danger },
+    accent: { bg: theme.accent, fg: theme.primaryDeep },
   };
   const tone2 = map[tone];
   return (
-    <View style={{ backgroundColor: tone2.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.pill }}>
-      <Txt variant="small" color={tone2.fg} style={{ fontWeight: '600', fontSize: 11 }}>
+    <View style={{ backgroundColor: tone2.bg, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radii.pill }}>
+      <Txt variant="small" color={tone2.fg} style={{ fontWeight: '700', fontSize: 10.5 }}>
         {label}
       </Txt>
     </View>
@@ -511,32 +607,95 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
+export function ListRow({
+  icon,
+  iconColor,
+  iconBg,
+  title,
+  subtitle,
+  right,
+  onPress,
+  chevron = true,
+}: {
+  icon: IconName;
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+  onPress?: () => void;
+  chevron?: boolean;
+}) {
+  const theme = useTheme();
+  const content = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 13 }}>
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          backgroundColor: iconBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <Ionicons name={icon} size={19} color={iconColor} />
+      </View>
+      <View style={{ flex: 1, gap: 1 }}>
+        <Txt variant="body" style={{ fontWeight: '600' }}>
+          {title}
+        </Txt>
+        {subtitle ? (
+          <Txt variant="small" color={theme.textMuted} numberOfLines={1}>
+            {subtitle}
+          </Txt>
+        ) : null}
+      </View>
+      {right}
+      {onPress && chevron ? <Ionicons name="chevron-forward" size={16} color={theme.textMuted} /> : null}
+    </View>
+  );
+
+  if (!onPress) return content;
+  return (
+    <PressableScale onPress={onPress} haptic="selection">
+      {content}
+    </PressableScale>
+  );
+}
+
 export function useThemeSafe(): Theme {
   return useTheme();
 }
 
-export const uiStyles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.sm,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+export function ProgressBar({ value, color }: { value: number; color?: string }) {
+  const theme = useTheme();
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+  return (
+    <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.cardAlt, overflow: 'hidden' }}>
+      <View
+        style={{
+          width: `${Math.round(clamped * 100)}%`,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: color ?? theme.accent,
+        }}
+      />
+    </View>
+  );
+}
+
+export const UI = StyleSheet.create({
+  indexLetter: { fontSize: 12, fontWeight: '700' },
 });
 
 const styles = StyleSheet.create({
-  display: { fontSize: 30, fontWeight: '700', letterSpacing: -0.6 },
-  title: { fontSize: 21, fontWeight: '700', letterSpacing: -0.3 },
-  section: { fontSize: 15, fontWeight: '600' },
+  display: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4 },
+  section: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   body: { fontSize: 14, fontWeight: '400' },
   small: { fontSize: 12, fontWeight: '400' },
-  label: { fontSize: 11.5, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
+  amount: { fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });
+
+

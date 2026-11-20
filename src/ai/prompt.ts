@@ -1,12 +1,11 @@
-export const CATEGORY_HINT = 'Transport, Penginapan, Makan, Parkir, BBM, ATK, Lain-lain';
-
 export const GEMINI_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
     merchant: { type: 'string' },
     date: { type: 'string' },
-    total: { type: 'number' },
+    subtotal: { type: 'number' },
     tax: { type: 'number' },
+    total: { type: 'number' },
     category: { type: 'string' },
     confidence: { type: 'number' },
     items: {
@@ -15,33 +14,36 @@ export const GEMINI_RESPONSE_SCHEMA = {
         type: 'object',
         properties: {
           name: { type: 'string' },
+          qty: { type: 'number' },
           price: { type: 'number' },
         },
         required: ['name', 'price'],
       },
     },
   },
-  required: ['merchant', 'date', 'total', 'category'],
+  required: ['merchant', 'date', 'total', 'items'],
 };
 
 export function buildReceiptPrompt(ocrText: string, categories: string[], today: string): string {
   const text = ocrText.slice(0, 3500);
-  return `Kamu membaca foto struk belanja Indonesia untuk laporan reimburse kantor.
+  return `Kamu membaca foto struk belanja Indonesia. Tugasmu menyalin isi struk, bukan menebak.
 
-Tugas: keluarkan data dari gambar. Teks hasil OCR perangkat disertakan sebagai pembanding; percayai gambar bila berbeda.
+Yang wajib diambil:
+1. merchant: nama toko/restoran saja, tanpa alamat dan tanpa nomor telepon.
+2. date: tanggal yang TERTERA di struk, format YYYY-MM-DD. Hari ini ${today}. Kalau benar-benar tidak ada, pakai ${today}.
+3. items: SETIAP baris barang yang dibeli. name = nama barang apa adanya, qty = jumlah (default 1), price = harga satuan dalam rupiah. Jangan menggabungkan baris, jangan mengarang barang.
+4. subtotal: jumlah sebelum pajak/diskon kalau tertulis.
+5. tax: PPN/PB1/service kalau tertulis, kalau tidak 0.
+6. total: jumlah akhir yang dibayar. Kalau ada TUNAI dan KEMBALI, total = tunai - kembali.
+7. category: pilih tepat satu dari ${categories.join(', ')}.
+8. confidence: 0-100, turunkan kalau foto buram.
 
-Aturan wajib:
-- total = jumlah akhir yang dibayar pembeli, BUKAN subtotal. Kalau ada tunai dan kembalian, total = tunai - kembali.
-- Angka dalam integer rupiah tanpa titik, koma, atau simbol.
-- date format YYYY-MM-DD. Hari ini ${today}. Kalau tanggal tidak ada di struk, pakai ${today}.
-- category pilih tepat satu dari: ${categories.join(', ')}.
-- tax hanya isi pajak (PPN/PB1/service) kalau tertulis. Kalau tidak ada, 0.
-- merchant = nama toko/restoran, tanpa alamat.
-- confidence 0-100, jujur: turunkan kalau gambar buram atau total tidak jelas.
-- items hanya item yang benar-benar terbaca, maksimal 12 baris.
-- Jangan mengarang. Kalau ragu, pakai nilai yang paling mungkin terlihat.
+Aturan angka:
+- Integer rupiah tanpa titik, koma, atau simbol. "25.000" menjadi 25000.
+- Jangan memasukkan baris TOTAL, SUBTOTAL, TUNAI, KEMBALI, PPN, DISKON ke items.
+- Jangan mengarang. Kalau ragu, pakai yang paling mungkin terlihat.
 
-Teks OCR perangkat:
+Teks OCR perangkat (pembanding, boleh berbeda dari gambar):
 """
 ${text || '(kosong)'}
 """`;

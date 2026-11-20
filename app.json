@@ -3,13 +3,13 @@
     "name": "NotaKu",
     "slug": "notaku",
     "owner": "zanracle",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "notaku",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.notaku.app",
       "supportsTablet": true,
       "infoPlist": {
@@ -26,10 +26,8 @@
         "android.permission.USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#0F766E",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0B3D31",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -42,9 +40,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0F766E",
+          "backgroundColor": "#0B3D31",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 148
         }
       ],
       [
@@ -58,6 +56,15 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "NotaKu memakai Face ID untuk membuka aplikasi."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
         }
       ],
       "expo-sharing",

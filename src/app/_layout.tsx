@@ -24,8 +24,12 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="capture" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="review" />
-          <Stack.Screen name="trip/[id]" />
+          <Stack.Screen name="wallet/[id]" />
           <Stack.Screen name="backup" />
+          <Stack.Screen name="settings/profile" />
+          <Stack.Screen name="settings/ai" />
+          <Stack.Screen name="settings/wallets" />
+          <Stack.Screen name="settings/categories" />
         </Stack>
       </AppProvider>
     </ThemeProvider>

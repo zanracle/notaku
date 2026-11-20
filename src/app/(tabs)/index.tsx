@@ -1,66 +1,75 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { ExpenseRow } from '@/components/expense-row';
-import { TripFormSheet } from '@/components/trip-picker';
+import { WalletFormSheet } from '@/components/wallet-picker';
 import {
-  activeTrip,
-  countNotReported,
+  dailyTotals,
+  ensureDefaultWallet,
   listExpenses,
-  listTrips,
+  listWallets,
+  monthRange,
   totals,
   type Expense,
-  type Totals,
-  type Trip,
+  type Wallet,
 } from '@/db/queries';
-import { currentMonthKey, formatDateID, monthLabel } from '@/lib/dates';
-import { formatRupiah } from '@/lib/money';
+import { addDays, currentMonthKey, formatDayMonth, monthLabel, todayISO } from '@/lib/dates';
+import { formatRupiah, formatRupiahCompact } from '@/lib/money';
 import { useApp } from '@/state/app';
 import { radii, space, useTheme } from '@/theme';
-import { AppButton, Card, EmptyState, Screen, SectionTitle, Txt } from '@/ui/components';
-
-function greeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 11) return 'Selamat pagi';
-  if (hour < 15) return 'Selamat siang';
-  if (hour < 19) return 'Selamat sore';
-  return 'Selamat malam';
-}
+import {
+  AppButton,
+  Card,
+  EmptyState,
+  PressableScale,
+  Screen,
+  SectionTitle,
+  Txt,
+} from '@/ui/components';
 
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { settings } = useApp();
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [month, setMonth] = useState<Totals>({ total: 0, count: 0, tax: 0 });
-  const [tripTotals, setTripTotals] = useState<Totals>({ total: 0, count: 0, tax: 0 });
-  const [pending, setPending] = useState(0);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [walletTotals, setWalletTotals] = useState<Record<string, { total: number; count: number }>>({});
+  const [month, setMonth] = useState({ total: 0, count: 0 });
+  const [daily, setDaily] = useState<{ date: string; total: number }[]>([]);
   const [recent, setRecent] = useState<Expense[]>([]);
-  const [tripSheet, setTripSheet] = useState(false);
   const [pendingBackup, setPendingBackup] = useState(false);
+  const [walletSheet, setWalletSheet] = useState(false);
 
   const load = useCallback(async () => {
-    const key = currentMonthKey();
-    const from = `${key}-01`;
-    const to = `${key}-31`;
-    const [allTrips, current, monthTotal, pendingCount, latest] = await Promise.all([
-      listTrips(),
-      activeTrip(),
-      totals({ from, to }),
-      countNotReported(),
-      listExpenses({ limit: 5 }),
+    let list = await listWallets();
+    if (list.length === 0) {
+      const created = await ensureDefaultWallet();
+      list = [created];
+    }
+    setWallets(list);
+
+    const range = monthRange();
+    const [monthTotals, dailyRows, latest] = await Promise.all([
+      totals(range),
+      dailyTotals(addDays(todayISO(), -6), todayISO()),
+      listExpenses({ limit: 4 }),
     ]);
-    setTrips(allTrips);
-    setTrip(current);
-    setMonth(monthTotal);
-    setPending(pendingCount);
+
+    const perWallet: Record<string, { total: number; count: number }> = {};
+    await Promise.all(
+      list.map(async (wallet) => {
+        perWallet[wallet.id] = await totals({ ...range, walletId: wallet.id });
+      }),
+    );
+
+    setWalletTotals(perWallet);
+    setMonth({ total: monthTotals.total, count: monthTotals.count });
+    setDaily(dailyRows);
     setRecent(latest);
-    setTripTotals(current ? await totals({ tripId: current.id }) : { total: 0, count: 0, tax: 0 });
+
     const lastBackup = settings.last_backup_at ? new Date(settings.last_backup_at).getTime() : 0;
-    setPendingBackup(monthTotal.count > 0 && Date.now() - lastBackup > 7 * 86_400_000);
+    setPendingBackup(monthTotals.count > 0 && Date.now() - lastBackup > 7 * 86_400_000);
   }, [settings.last_backup_at]);
 
   useFocusEffect(
@@ -69,216 +78,271 @@ export default function HomeScreen() {
     }, [load]),
   );
 
+  const first = settings.nama?.trim().split(' ')[0];
+  const maxDaily = Math.max(1, ...daily.map((d) => d.total));
+  const bars = Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(todayISO(), i - 6);
+    const found = daily.find((d) => d.date === date);
+    return { date, total: found?.total ?? 0 };
+  });
+
   return (
-    <Screen edges={['top']}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingTop: space.sm }}>
+    <Screen edges={['top']} withTabs>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: space.sm }}>
         <View style={{ flex: 1 }}>
           <Txt variant="small" color={theme.textMuted}>
-            {greeting()}
-            {settings.nama ? `, ${settings.nama.split(' ')[0]}` : ''}
+            {first ? `Halo, ${first}` : 'Selamat datang'}
           </Txt>
           <Txt variant="display">NotaKu</Txt>
         </View>
-        <Pressable
+        <PressableScale
           onPress={() => router.push('/(tabs)/settings')}
+          haptic="selection"
           accessibilityLabel="Pengaturan"
-          hitSlop={10}
           style={{
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            backgroundColor: theme.card,
-            borderWidth: 1,
-            borderColor: theme.border,
+            width: 44,
+            height: 44,
+            borderRadius: 16,
+            backgroundColor: theme.primaryDeep,
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-          <Ionicons name="person-outline" size={19} color={theme.text} />
-        </Pressable>
+          <Txt variant="section" color="#F0A83C">
+            {(settings.nama || 'N').trim().charAt(0).toUpperCase()}
+          </Txt>
+        </PressableScale>
       </View>
 
-      <Card style={{ backgroundColor: theme.primary, borderColor: theme.primary, gap: space.xs }}>
-        <Txt variant="label" color={theme.onPrimary} style={{ opacity: 0.75 }}>
-          Total {monthLabel(currentMonthKey())}
+      <View
+        style={{
+          backgroundColor: theme.primaryDeep,
+          borderRadius: radii.xxl,
+          padding: space.xl,
+          gap: space.sm,
+          overflow: 'hidden',
+        }}>
+        <Txt variant="label" color="#9DBDB2">
+          Pengeluaran {monthLabel(currentMonthKey())}
         </Txt>
-        <Txt variant="display" color={theme.onPrimary}>
+        <Txt variant="display" color="#FFFFFF" style={{ letterSpacing: -1 }}>
           {formatRupiah(month.total)}
         </Txt>
-        <Txt variant="small" color={theme.onPrimary} style={{ opacity: 0.85 }}>
-          {month.count} catatan · pajak {formatRupiah(month.tax)}
-        </Txt>
-      </Card>
-
-      <View style={{ flexDirection: 'row', gap: space.md }}>
-        <AppButton
-          title="Foto Struk"
-          icon="camera"
-          onPress={() => router.push('/capture')}
-          style={{ flex: 1.2 }}
-        />
-        <AppButton
-          title="Input Manual"
-          icon="create-outline"
-          variant="secondary"
-          onPress={() => router.push('/review')}
-          style={{ flex: 1 }}
-        />
-      </View>
-
-      {pending > 0 ? (
-        <Pressable
-          onPress={() => router.push('/(tabs)/expenses')}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.md,
-            backgroundColor: theme.warningSoft,
-            borderRadius: radii.md,
-            padding: space.md,
-            opacity: pressed ? 0.75 : 1,
-          })}>
-          <Ionicons name="alert-circle-outline" size={20} color={theme.warning} />
-          <Txt variant="small" color={theme.warning} style={{ flex: 1, fontWeight: '600' }}>
-            {pending} biaya belum ditandai terkirim
-          </Txt>
-          <Ionicons name="chevron-forward" size={16} color={theme.warning} />
-        </Pressable>
-      ) : null}
-
-      {pendingBackup ? (
-        <Pressable
-          onPress={() => router.push('/backup')}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.md,
-            backgroundColor: theme.cardAlt,
-            borderRadius: radii.md,
-            padding: space.md,
-            opacity: pressed ? 0.75 : 1,
-          })}>
-          <Ionicons name="cloud-upload-outline" size={20} color={theme.textMuted} />
-          <Txt variant="small" color={theme.textMuted} style={{ flex: 1 }}>
-            Sudah lebih dari 7 hari tanpa backup. Data hanya ada di HP ini.
-          </Txt>
-          <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
-        </Pressable>
-      ) : null}
-
-      <SectionTitle
-        right={
-          trips.length > 0 ? (
-            <Pressable onPress={() => setTripSheet(true)} hitSlop={8} accessibilityLabel="Dinas baru">
-              <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-                + Dinas
-              </Txt>
-            </Pressable>
-          ) : null
-        }>
-        Dinas aktif
-      </SectionTitle>
-
-      {trip ? (
-        <Card onPress={() => router.push({ pathname: '/trip/[id]', params: { id: trip.id } })}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: theme.primarySoft,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Ionicons name="briefcase-outline" size={20} color={theme.primary} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Txt variant="section" numberOfLines={1}>
-                {trip.name}
-              </Txt>
-              <Txt variant="small" color={theme.textMuted}>
-                {formatDateID(trip.startDate)} – {formatDateID(trip.endDate)}
-                {trip.city ? ` · ${trip.city}` : ''}
-              </Txt>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 4 }}>
+          <View style={{ backgroundColor: '#145C49', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 }}>
+            <Txt variant="small" color="#CDE7DE" style={{ fontWeight: '700' }}>
+              {month.count} struk
+            </Txt>
           </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              marginTop: space.md,
-              paddingTop: space.md,
-              borderTopWidth: 1,
-              borderTopColor: theme.border,
-            }}>
-            <View>
-              <Txt variant="small" color={theme.textMuted}>
-                Total dinas
-              </Txt>
-              <Txt variant="section">{formatRupiah(tripTotals.total)}</Txt>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Txt variant="small" color={theme.textMuted}>
-                Jumlah biaya
-              </Txt>
-              <Txt variant="section">{tripTotals.count}</Txt>
-            </View>
-          </View>
-        </Card>
-      ) : (
-        <Card>
-          <EmptyState
-            icon="briefcase-outline"
-            title="Belum ada dinas"
-            body="Buat dinas supaya biaya bisa dikelompokkan dan dilaporkan ke finance."
-            action={<AppButton title="Buat dinas" compact onPress={() => setTripSheet(true)} />}
-          />
-        </Card>
-      )}
+          <Txt variant="small" color="#9DBDB2">
+            rata-rata {formatRupiahCompact(month.count ? Math.round(month.total / month.count) : 0)}
+          </Txt>
+        </View>
 
-      <SectionTitle
-        right={
-          recent.length > 0 ? (
-            <Pressable onPress={() => router.push('/(tabs)/expenses')} hitSlop={8}>
-              <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-                Lihat semua
-              </Txt>
-            </Pressable>
-          ) : null
-        }>
-        Terakhir dicatat
-      </SectionTitle>
-
-      {recent.length > 0 ? (
-        <Card padded={false} style={{ paddingHorizontal: space.md }}>
-          {recent.map((expense, index) => (
-            <View key={expense.id}>
-              <ExpenseRow
-                expense={expense}
-                onPress={() =>
-                  router.push({ pathname: '/review', params: { expenseId: expense.id } })
-                }
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 7, height: 54, marginTop: space.sm }}>
+          {bars.map((bar, index) => (
+            <View key={bar.date} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: Math.max(5, Math.round((bar.total / maxDaily) * 38)),
+                  borderRadius: 4,
+                  backgroundColor: index === 6 ? theme.accent : '#2C6B58',
+                }}
               />
-              {index < recent.length - 1 ? (
-                <View style={{ height: 1, backgroundColor: theme.border }} />
-              ) : null}
             </View>
           ))}
-        </Card>
-      ) : (
-        <Card>
-          <EmptyState
-            icon="scan-outline"
-            title="Belum ada catatan"
-            body="Foto struk pertama, atau isi manual kalau struknya tidak ada."
-          />
-        </Card>
-      )}
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Txt variant="small" color="#9DBDB2" style={{ fontSize: 10 }}>
+            {formatDayMonth(bars[0].date)}
+          </Txt>
+          <Txt variant="small" color="#9DBDB2" style={{ fontSize: 10 }}>
+            Hari ini
+          </Txt>
+        </View>
+      </View>
 
-      <TripFormSheet
-        visible={tripSheet}
-        onClose={() => setTripSheet(false)}
+      <View style={{ flexDirection: 'row', gap: space.md }}>
+        <PressableScale
+          onPress={() => router.push('/capture')}
+          haptic="medium"
+          style={{
+            flex: 1,
+            backgroundColor: theme.mint,
+            borderRadius: radii.xxl,
+            padding: space.lg,
+            gap: space.md,
+          }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              backgroundColor: theme.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Ionicons name="camera" size={20} color={theme.onPrimary} />
+          </View>
+          <Txt variant="section" color={theme.primaryDeep}>
+            Foto struk
+          </Txt>
+        </PressableScale>
+
+        <PressableScale
+          onPress={() => router.push('/review')}
+          haptic="medium"
+          style={{
+            flex: 1,
+            backgroundColor: theme.accentSoft,
+            borderRadius: radii.xxl,
+            padding: space.lg,
+            gap: space.md,
+          }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              backgroundColor: theme.accent,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Ionicons name="create" size={20} color={theme.primaryDeep} />
+          </View>
+          <Txt variant="section">Input manual</Txt>
+        </PressableScale>
+      </View>
+
+      {pendingBackup ? (
+        <PressableScale
+          onPress={() => router.push('/backup')}
+          haptic="selection"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: radii.lg,
+            padding: space.md,
+          }}>
+          <Ionicons name="cloud-upload-outline" size={18} color={theme.textMuted} />
+          <Txt variant="small" color={theme.textMuted} style={{ flex: 1 }}>
+            Sudah seminggu tanpa backup. Data hanya ada di HP ini.
+          </Txt>
+          <Ionicons name="chevron-forward" size={15} color={theme.textMuted} />
+        </PressableScale>
+      ) : null}
+
+      <View style={{ gap: space.sm }}>
+        <SectionTitle
+          right={
+            <PressableScale onPress={() => router.push('/settings/wallets')} haptic="selection">
+              <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+                Kelola
+              </Txt>
+            </PressableScale>
+          }>
+          Dompet
+        </SectionTitle>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {wallets.map((wallet) => {
+            const stat = walletTotals[wallet.id] ?? { total: 0, count: 0 };
+            return (
+              <PressableScale
+                key={wallet.id}
+                onPress={() => router.push({ pathname: '/wallet/[id]', params: { id: wallet.id } })}
+                haptic="light"
+                style={{
+                  width: 170,
+                  backgroundColor: theme.card,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: radii.xl,
+                  padding: space.lg,
+                  gap: 6,
+                }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: wallet.color }} />
+                  <Txt variant="small" style={{ fontWeight: '700' }} numberOfLines={1}>
+                    {wallet.name}
+                  </Txt>
+                </View>
+                <Txt variant="amount" style={{ fontSize: 17 }}>
+                  {formatRupiah(stat.total)}
+                </Txt>
+                <Txt variant="small" color={theme.textMuted} style={{ fontSize: 11 }}>
+                  {stat.count} struk bulan ini
+                </Txt>
+              </PressableScale>
+            );
+          })}
+          <PressableScale
+            onPress={() => setWalletSheet(true)}
+            haptic="selection"
+            style={{
+              width: 92,
+              borderRadius: radii.xl,
+              borderWidth: 1.5,
+              borderStyle: 'dashed',
+              borderColor: theme.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+            }}>
+            <Ionicons name="add" size={20} color={theme.textMuted} />
+            <Txt variant="small" color={theme.textMuted} style={{ fontSize: 11 }}>
+              Tambah
+            </Txt>
+          </PressableScale>
+        </ScrollView>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <SectionTitle
+          right={
+            recent.length > 0 ? (
+              <PressableScale onPress={() => router.push('/(tabs)/expenses')} haptic="selection">
+                <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+                  Lihat semua
+                </Txt>
+              </PressableScale>
+            ) : null
+          }>
+          Terakhir
+        </SectionTitle>
+
+        {recent.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon="receipt-outline"
+              title="Belum ada catatan"
+              body="Foto struk pertamamu, atau input manual kalau struknya tidak ada."
+              action={<AppButton title="Foto struk" compact onPress={() => router.push('/capture')} />}
+            />
+          </Card>
+        ) : (
+          <Card padded={false} style={{ paddingVertical: 4 }}>
+            {recent.map((expense, index) => (
+              <View key={expense.id}>
+                {index > 0 ? (
+                  <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 68 }} />
+                ) : null}
+                <ExpenseRow
+                  expense={expense}
+                  onPress={() => router.push({ pathname: '/review', params: { expenseId: expense.id } })}
+                />
+              </View>
+            ))}
+          </Card>
+        )}
+      </View>
+
+      <WalletFormSheet
+        visible={walletSheet}
+        onClose={() => setWalletSheet(false)}
         onSaved={() => {
           load().catch(() => undefined);
         }}

@@ -3,26 +3,31 @@ import { DEFAULT_SETTINGS } from '@/lib/defaults';
 import { newId } from '@/lib/id';
 import { todayISO } from '@/lib/dates';
 
-export type Trip = {
+export type Wallet = {
   id: string;
   name: string;
-  city: string | null;
-  purpose: string | null;
-  refNo: string | null;
-  startDate: string;
-  endDate: string;
+  color: string;
   budget: number | null;
-  status: string;
   createdAt: string;
   updatedAt: string;
 };
 
+export type ExpenseItem = {
+  id: string;
+  expenseId: string;
+  name: string;
+  qty: number;
+  price: number;
+  sortOrder: number;
+};
+
 export type Expense = {
   id: string;
-  tripId: string;
+  walletId: string;
   merchant: string;
   date: string;
   amount: number;
+  subtotal: number | null;
   tax: number;
   currency: string;
   rate: number | null;
@@ -43,130 +48,94 @@ export type Expense = {
   updatedAt: string;
 };
 
-const TRIP_COLUMNS = `id, name, city, purpose, ref_no AS refNo, start_date AS startDate,
-  end_date AS endDate, budget, status, created_at AS createdAt, updated_at AS updatedAt`;
+const WALLET_COLUMNS = `id, name, color, budget, created_at AS createdAt, updated_at AS updatedAt`;
 
-const EXPENSE_COLUMNS = `id, trip_id AS tripId, merchant, date, amount, tax, currency, rate,
+const EXPENSE_COLUMNS = `id, wallet_id AS walletId, merchant, date, amount, subtotal, tax, currency, rate,
   category, note, payment_method AS paymentMethod, receipt_path AS receiptPath,
   thumb_path AS thumbPath, receipt_hash AS receiptHash, ocr_text AS ocrText, ai_json AS aiJson,
   source, confidence, status, sent_at AS sentAt, deleted_at AS deletedAt,
   created_at AS createdAt, updated_at AS updatedAt`;
 
+const ITEM_COLUMNS = `id, expense_id AS expenseId, name, qty, price, sort_order AS sortOrder`;
+
 const now = () => new Date().toISOString();
 
-/* ---------------------------------- trips --------------------------------- */
+/* --------------------------------- wallets -------------------------------- */
 
-export async function listTrips(): Promise<Trip[]> {
+export async function listWallets(): Promise<Wallet[]> {
   const db = await getDb();
-  return db.getAllAsync<Trip>(
-    `SELECT ${TRIP_COLUMNS} FROM trips ORDER BY status = 'open' DESC, start_date DESC`,
-  );
+  return db.getAllAsync<Wallet>(`SELECT ${WALLET_COLUMNS} FROM wallets ORDER BY created_at ASC`);
 }
 
-export async function getTrip(id: string): Promise<Trip | null> {
+export async function getWallet(id: string): Promise<Wallet | null> {
   const db = await getDb();
-  return db.getFirstAsync<Trip>(`SELECT ${TRIP_COLUMNS} FROM trips WHERE id = ?`, [id]);
+  return db.getFirstAsync<Wallet>(`SELECT ${WALLET_COLUMNS} FROM wallets WHERE id = ?`, [id]);
 }
 
-export type TripInput = {
+export async function createWallet(input: {
   name: string;
-  city?: string | null;
-  purpose?: string | null;
-  refNo?: string | null;
-  startDate: string;
-  endDate: string;
+  color?: string;
   budget?: number | null;
-};
-
-export async function createTrip(input: TripInput): Promise<Trip> {
+}): Promise<Wallet> {
   const db = await getDb();
-  const id = newId('trip');
+  const id = newId('wal');
   const ts = now();
   await db.runAsync(
-    `INSERT INTO trips (id, name, city, purpose, ref_no, start_date, end_date, budget, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
-    [
-      id,
-      input.name.trim(),
-      input.city?.trim() || null,
-      input.purpose?.trim() || null,
-      input.refNo?.trim() || null,
-      input.startDate,
-      input.endDate,
-      input.budget ?? null,
-      ts,
-      ts,
-    ],
+    'INSERT INTO wallets (id, name, color, budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, input.name.trim() || 'Dompet', input.color ?? '#0E7C5F', input.budget ?? null, ts, ts],
   );
-  const trip = await getTrip(id);
-  if (!trip) throw new Error('Gagal membuat dinas');
-  return trip;
+  const wallet = await getWallet(id);
+  if (!wallet) throw new Error('Gagal membuat dompet');
+  return wallet;
 }
 
-export async function updateTrip(id: string, patch: Partial<TripInput & { status: string }>): Promise<void> {
+export async function updateWallet(
+  id: string,
+  patch: { name?: string; color?: string; budget?: number | null },
+): Promise<void> {
   const db = await getDb();
-  const current = await getTrip(id);
-  if (!current) throw new Error('Dinas tidak ditemukan');
+  const current = await getWallet(id);
+  if (!current) throw new Error('Dompet tidak ditemukan');
   await db.runAsync(
-    `UPDATE trips SET name = ?, city = ?, purpose = ?, ref_no = ?, start_date = ?, end_date = ?,
-       budget = ?, status = ?, updated_at = ? WHERE id = ?`,
+    'UPDATE wallets SET name = ?, color = ?, budget = ?, updated_at = ? WHERE id = ?',
     [
-      patch.name?.trim() ?? current.name,
-      patch.city !== undefined ? patch.city || null : current.city,
-      patch.purpose !== undefined ? patch.purpose || null : current.purpose,
-      patch.refNo !== undefined ? patch.refNo || null : current.refNo,
-      patch.startDate ?? current.startDate,
-      patch.endDate ?? current.endDate,
-      patch.budget !== undefined ? patch.budget ?? null : current.budget,
-      patch.status ?? current.status,
+      patch.name?.trim() || current.name,
+      patch.color ?? current.color,
+      patch.budget !== undefined ? patch.budget : current.budget,
       now(),
       id,
     ],
   );
 }
 
-export async function deleteTrip(id: string): Promise<void> {
+export async function deleteWallet(id: string): Promise<void> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) AS count FROM expenses WHERE trip_id = ?',
+    'SELECT COUNT(*) AS count FROM expenses WHERE wallet_id = ?',
     [id],
   );
   if ((row?.count ?? 0) > 0) {
-    throw new Error('Dinas masih punya biaya. Hapus atau pindahkan biayanya dulu.');
+    throw new Error('Dompet masih punya catatan. Pindahkan atau hapus catatannya dulu.');
   }
-  await db.runAsync('DELETE FROM trips WHERE id = ?', [id]);
+  await db.runAsync('DELETE FROM wallets WHERE id = ?', [id]);
 }
 
-/** Dinas yang sedang berjalan hari ini, atau yang paling baru. */
-export async function activeTrip(): Promise<Trip | null> {
-  const db = await getDb();
-  const today = todayISO();
-  const running = await db.getFirstAsync<Trip>(
-    `SELECT ${TRIP_COLUMNS} FROM trips
-     WHERE status = 'open' AND start_date <= ? AND end_date >= ?
-     ORDER BY start_date DESC LIMIT 1`,
-    [today, today],
-  );
-  if (running) return running;
-  return db.getFirstAsync<Trip>(
-    `SELECT ${TRIP_COLUMNS} FROM trips WHERE status = 'open' ORDER BY start_date DESC LIMIT 1`,
-  );
-}
-
-export async function ensureDefaultTrip(): Promise<Trip> {
-  const existing = await listTrips();
-  if (existing.length > 0) return existing[0];
-  const today = todayISO();
-  return createTrip({ name: 'Dinas Umum', startDate: today, endDate: today });
+export async function ensureDefaultWallet(): Promise<Wallet> {
+  const wallets = await listWallets();
+  if (wallets.length > 0) return wallets[0];
+  return createWallet({ name: 'Dompet Harian', color: '#0E7C5F' });
 }
 
 /* -------------------------------- expenses -------------------------------- */
 
+export type ItemInput = { name: string; qty?: number; price: number };
+
 export type ExpenseInput = {
-  tripId: string;
+  walletId: string;
   merchant: string;
   date: string;
   amount: number;
+  subtotal?: number | null;
   tax?: number;
   category: string;
   note?: string | null;
@@ -178,87 +147,135 @@ export type ExpenseInput = {
   aiJson?: string | null;
   source?: 'manual' | 'ocr' | 'ai';
   confidence?: number | null;
-  status?: 'draft' | 'siap' | 'terkirim';
+  items?: ItemInput[];
 };
+
+async function insertItems(
+  tx: { runAsync: (sql: string, params: (string | number | null)[]) => Promise<unknown> },
+  expenseId: string,
+  items: ItemInput[],
+): Promise<void> {
+  let order = 0;
+  for (const item of items) {
+    if (!item.name.trim() || !Number.isFinite(item.price)) continue;
+    await tx.runAsync(
+      'INSERT INTO expense_items (id, expense_id, name, qty, price, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [newId('itm'), expenseId, item.name.trim().slice(0, 120), item.qty ?? 1, Math.round(item.price), order],
+    );
+    order += 1;
+  }
+}
 
 export async function createExpense(input: ExpenseInput): Promise<Expense> {
   const db = await getDb();
   const id = newId('exp');
   const ts = now();
-  await db.runAsync(
-    `INSERT INTO expenses (id, trip_id, merchant, date, amount, tax, category, note, payment_method,
-       receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence, status,
-       created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      input.tripId,
-      input.merchant.trim() || 'Tanpa nama',
-      input.date,
-      input.amount,
-      input.tax ?? 0,
-      input.category,
-      input.note?.trim() || null,
-      input.paymentMethod?.trim() || null,
-      input.receiptPath ?? null,
-      input.thumbPath ?? null,
-      input.receiptHash ?? null,
-      input.ocrText ?? null,
-      input.aiJson ?? null,
-      input.source ?? 'manual',
-      input.confidence ?? null,
-      input.status ?? 'draft',
-      ts,
-      ts,
-    ],
-  );
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync(
+      `INSERT INTO expenses (id, wallet_id, merchant, date, amount, subtotal, tax, category, note,
+         payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence,
+         status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        input.walletId,
+        input.walletId,
+        input.merchant.trim() || 'Tanpa nama',
+        input.date,
+        input.amount,
+        input.subtotal ?? null,
+        input.tax ?? 0,
+        input.category,
+        input.note?.trim() || null,
+        input.paymentMethod?.trim() || null,
+        input.receiptPath ?? null,
+        input.thumbPath ?? null,
+        input.receiptHash ?? null,
+        input.ocrText ?? null,
+        input.aiJson ?? null,
+        input.source ?? 'manual',
+        input.confidence ?? null,
+        'draft',
+        ts,
+        ts,
+      ],
+    );
+    await insertItems(tx, id, input.items ?? []);
+  });
   const expense = await getExpense(id);
-  if (!expense) throw new Error('Gagal menyimpan biaya');
+  if (!expense) throw new Error('Gagal menyimpan catatan');
   return expense;
 }
 
-export async function updateExpense(id: string, patch: Partial<ExpenseInput>): Promise<void> {
+export async function updateExpense(
+  id: string,
+  patch: Partial<ExpenseInput> & { items?: ItemInput[] },
+): Promise<void> {
   const db = await getDb();
   const current = await getExpense(id);
-  if (!current) throw new Error('Biaya tidak ditemukan');
-  await db.runAsync(
-    `UPDATE expenses SET trip_id = ?, merchant = ?, date = ?, amount = ?, tax = ?, category = ?,
-       note = ?, payment_method = ?, receipt_path = ?, thumb_path = ?, receipt_hash = ?,
-       ocr_text = ?, ai_json = ?, source = ?, confidence = ?, status = ?, updated_at = ?
-     WHERE id = ?`,
-    [
-      patch.tripId ?? current.tripId,
-      (patch.merchant ?? current.merchant).trim() || 'Tanpa nama',
-      patch.date ?? current.date,
-      patch.amount ?? current.amount,
-      patch.tax ?? current.tax,
-      patch.category ?? current.category,
-      patch.note !== undefined ? patch.note?.trim() || null : current.note,
-      patch.paymentMethod !== undefined ? patch.paymentMethod?.trim() || null : current.paymentMethod,
-      patch.receiptPath !== undefined ? patch.receiptPath : current.receiptPath,
-      patch.thumbPath !== undefined ? patch.thumbPath : current.thumbPath,
-      patch.receiptHash !== undefined ? patch.receiptHash : current.receiptHash,
-      patch.ocrText !== undefined ? patch.ocrText : current.ocrText,
-      patch.aiJson !== undefined ? patch.aiJson : current.aiJson,
-      patch.source ?? current.source,
-      patch.confidence !== undefined ? patch.confidence : current.confidence,
-      patch.status ?? current.status,
-      now(),
-      id,
-    ],
-  );
+  if (!current) throw new Error('Catatan tidak ditemukan');
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync(
+      `UPDATE expenses SET wallet_id = ?, merchant = ?, date = ?, amount = ?, subtotal = ?, tax = ?,
+         category = ?, note = ?, payment_method = ?, receipt_path = ?, thumb_path = ?, receipt_hash = ?,
+         ocr_text = ?, ai_json = ?, source = ?, confidence = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        patch.walletId ?? current.walletId,
+        (patch.merchant ?? current.merchant).trim() || 'Tanpa nama',
+        patch.date ?? current.date,
+        patch.amount ?? current.amount,
+        patch.subtotal !== undefined ? patch.subtotal : current.subtotal,
+        patch.tax ?? current.tax,
+        patch.category ?? current.category,
+        patch.note !== undefined ? patch.note?.trim() || null : current.note,
+        patch.paymentMethod !== undefined ? patch.paymentMethod?.trim() || null : current.paymentMethod,
+        patch.receiptPath !== undefined ? patch.receiptPath : current.receiptPath,
+        patch.thumbPath !== undefined ? patch.thumbPath : current.thumbPath,
+        patch.receiptHash !== undefined ? patch.receiptHash : current.receiptHash,
+        patch.ocrText !== undefined ? patch.ocrText : current.ocrText,
+        patch.aiJson !== undefined ? patch.aiJson : current.aiJson,
+        patch.source ?? current.source,
+        patch.confidence !== undefined ? patch.confidence : current.confidence,
+        now(),
+        id,
+      ],
+    );
+    if (patch.items) {
+      await tx.runAsync('DELETE FROM expense_items WHERE expense_id = ?', [id]);
+      await insertItems(tx, id, patch.items);
+    }
+  });
 }
 
 export async function getExpense(id: string): Promise<Expense | null> {
   const db = await getDb();
-  return db.getFirstAsync<Expense>(
-    `SELECT ${EXPENSE_COLUMNS} FROM expenses WHERE id = ?`,
-    [id],
+  return db.getFirstAsync<Expense>(`SELECT ${EXPENSE_COLUMNS} FROM expenses WHERE id = ?`, [id]);
+}
+
+export async function listItems(expenseId: string): Promise<ExpenseItem[]> {
+  const db = await getDb();
+  return db.getAllAsync<ExpenseItem>(
+    `SELECT ${ITEM_COLUMNS} FROM expense_items WHERE expense_id = ? ORDER BY sort_order ASC`,
+    [expenseId],
   );
 }
 
+export async function listItemsFor(expenseIds: string[]): Promise<Record<string, ExpenseItem[]>> {
+  if (expenseIds.length === 0) return {};
+  const db = await getDb();
+  const placeholders = expenseIds.map(() => '?').join(',');
+  const rows = await db.getAllAsync<ExpenseItem>(
+    `SELECT ${ITEM_COLUMNS} FROM expense_items WHERE expense_id IN (${placeholders}) ORDER BY sort_order ASC`,
+    expenseIds,
+  );
+  const map: Record<string, ExpenseItem[]> = {};
+  for (const row of rows) (map[row.expenseId] ??= []).push(row);
+  return map;
+}
+
 export type ExpenseQuery = {
-  tripId?: string;
+  walletId?: string;
   from?: string;
   to?: string;
   category?: string;
@@ -278,9 +295,9 @@ export async function listExpenses(query: ExpenseQuery = {}): Promise<Expense[]>
   if (query.onlyDeleted) where.push('deleted_at IS NOT NULL');
   else if (!query.includeDeleted) where.push('deleted_at IS NULL');
 
-  if (query.tripId) {
-    where.push('trip_id = ?');
-    params.push(query.tripId);
+  if (query.walletId) {
+    where.push('wallet_id = ?');
+    params.push(query.walletId);
   }
   if (query.from) {
     where.push('date >= ?');
@@ -325,22 +342,25 @@ export async function restoreExpense(id: string): Promise<void> {
   await db.runAsync('UPDATE expenses SET deleted_at = NULL, updated_at = ? WHERE id = ?', [now(), id]);
 }
 
-export async function purgeExpense(id: string): Promise<string | null> {
+/** Hapus permanen. Mengembalikan path file foto untuk dibersihkan pemanggil. */
+export async function purgeExpense(id: string): Promise<string[]> {
   const db = await getDb();
   const expense = await getExpense(id);
   await db.runAsync('DELETE FROM expenses WHERE id = ?', [id]);
-  return expense?.receiptPath ?? null;
+  return [expense?.receiptPath, expense?.thumbPath].filter((p): p is string => Boolean(p));
 }
 
 export type Totals = { total: number; count: number; tax: number };
 
-export async function totals(query: { tripId?: string; from?: string; to?: string } = {}): Promise<Totals> {
+export async function totals(
+  query: { walletId?: string; from?: string; to?: string } = {},
+): Promise<Totals> {
   const db = await getDb();
   const where = ['deleted_at IS NULL'];
   const params: (string | number)[] = [];
-  if (query.tripId) {
-    where.push('trip_id = ?');
-    params.push(query.tripId);
+  if (query.walletId) {
+    where.push('wallet_id = ?');
+    params.push(query.walletId);
   }
   if (query.from) {
     where.push('date >= ?');
@@ -360,33 +380,40 @@ export async function totals(query: { tripId?: string; from?: string; to?: strin
 
 export type CategoryTotal = { category: string; total: number; count: number };
 
-export async function totalsByCategory(tripId?: string): Promise<CategoryTotal[]> {
+export async function totalsByCategory(
+  query: { walletId?: string; from?: string; to?: string } = {},
+): Promise<CategoryTotal[]> {
   const db = await getDb();
+  const where = ['deleted_at IS NULL'];
+  const params: (string | number)[] = [];
+  if (query.walletId) {
+    where.push('wallet_id = ?');
+    params.push(query.walletId);
+  }
+  if (query.from) {
+    where.push('date >= ?');
+    params.push(query.from);
+  }
+  if (query.to) {
+    where.push('date <= ?');
+    params.push(query.to);
+  }
   return db.getAllAsync<CategoryTotal>(
     `SELECT category, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
-     FROM expenses WHERE deleted_at IS NULL ${tripId ? 'AND trip_id = ?' : ''}
+     FROM expenses WHERE ${where.join(' AND ')}
      GROUP BY category ORDER BY total DESC`,
-    tripId ? [tripId] : [],
+    params,
   );
 }
 
-export async function countNotReported(): Promise<number> {
+export async function dailyTotals(from: string, to: string, walletId?: string): Promise<{ date: string; total: number }[]> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) AS count FROM expenses WHERE deleted_at IS NULL AND status != 'terkirim'`,
+  return db.getAllAsync<{ date: string; total: number }>(
+    `SELECT date, COALESCE(SUM(amount), 0) AS total FROM expenses
+     WHERE deleted_at IS NULL AND date >= ? AND date <= ? ${walletId ? 'AND wallet_id = ?' : ''}
+     GROUP BY date ORDER BY date ASC`,
+    walletId ? [from, to, walletId] : [from, to],
   );
-  return row?.count ?? 0;
-}
-
-export async function markTripSent(tripId: string): Promise<void> {
-  const db = await getDb();
-  const ts = now();
-  await db.runAsync(
-    `UPDATE expenses SET status = 'terkirim', sent_at = ?, updated_at = ?
-     WHERE trip_id = ? AND deleted_at IS NULL`,
-    [ts, ts, tripId],
-  );
-  await db.runAsync("UPDATE trips SET status = 'closed', updated_at = ? WHERE id = ?", [ts, tripId]);
 }
 
 export type DuplicateHit = { expense: Expense; samePhoto: boolean };
@@ -403,8 +430,7 @@ export async function findDuplicate(input: {
   if (input.hash) {
     const same = await db.getFirstAsync<Expense>(
       `SELECT ${EXPENSE_COLUMNS} FROM expenses
-       WHERE receipt_hash = ? AND deleted_at IS NULL AND id != ?
-       LIMIT 1`,
+       WHERE receipt_hash = ? AND deleted_at IS NULL AND id != ? LIMIT 1`,
       [input.hash, input.excludeId ?? ''],
     );
     if (same) return { expense: same, samePhoto: true };
@@ -459,15 +485,7 @@ export async function logAiUsage(entry: {
   const db = await getDb();
   await db.runAsync(
     'INSERT INTO ai_usage (id, at, model, ok, tokens_in, tokens_out, error) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [
-      newId('ai'),
-      now(),
-      entry.model,
-      entry.ok ? 1 : 0,
-      entry.tokensIn ?? null,
-      entry.tokensOut ?? null,
-      entry.error ?? null,
-    ],
+    [newId('ai'), now(), entry.model, entry.ok ? 1 : 0, entry.tokensIn ?? null, entry.tokensOut ?? null, entry.error ?? null],
   );
 }
 
@@ -487,20 +505,36 @@ export async function aiUsageThisMonth(): Promise<{ calls: number; failed: numbe
 export async function dumpAll(): Promise<{
   version: number;
   exportedAt: string;
-  trips: Trip[];
+  wallets: Wallet[];
   expenses: Expense[];
+  items: ExpenseItem[];
   settings: Record<string, string>;
 }> {
   const db = await getDb();
-  const trips = await db.getAllAsync<Trip>(`SELECT ${TRIP_COLUMNS} FROM trips`);
-  const expenses = await db.getAllAsync<Expense>(
-    `SELECT ${EXPENSE_COLUMNS} FROM expenses ORDER BY date ASC`,
-  );
-  return { version: 1, exportedAt: now(), trips, expenses, settings: await getSettings() };
+  const wallets = await db.getAllAsync<Wallet>(`SELECT ${WALLET_COLUMNS} FROM wallets`);
+  const expenses = await db.getAllAsync<Expense>(`SELECT ${EXPENSE_COLUMNS} FROM expenses ORDER BY date ASC`);
+  const items = await db.getAllAsync<ExpenseItem>(`SELECT ${ITEM_COLUMNS} FROM expense_items`);
+  return {
+    version: 2,
+    exportedAt: now(),
+    wallets,
+    expenses,
+    items,
+    settings: await getSettings(),
+  };
 }
 
-export async function isEmptyDatabase(): Promise<boolean> {
+export async function recentWalletId(): Promise<string | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM expenses');
-  return (row?.count ?? 0) === 0;
+  const row = await db.getFirstAsync<{ walletId: string }>(
+    `SELECT wallet_id AS walletId FROM expenses WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+  );
+  return row?.walletId ?? null;
 }
+
+export function monthRange(iso: string = todayISO()): { from: string; to: string } {
+  const [y, m] = iso.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${iso.slice(0, 7)}-01`, to: `${iso.slice(0, 7)}-${String(last).padStart(2, '0')}` };
+}
+
