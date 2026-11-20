@@ -49,7 +49,9 @@
         "expo-camera",
         {
           "cameraPermission": "NotaKu memakai kamera untuk memotret struk belanja.",
-          "microphonePermission": false
+          "microphonePermission": false,
+          "barcodeScannerEnabled": false,
+          "documentScannerEnabled": false
         }
       ],
       [
