@@ -1,42 +1,41 @@
 ﻿# NotaKu
 
-Aplikasi pencatat pengeluaran dinas untuk reimburse. Foto struk, angkanya otomatis diisi
-(atau diketik manual), lalu jadi laporan PDF/JPG siap dikirim ke tim finance.
+Pencatat pengeluaran dari foto struk. Untuk reimburse kantor maupun catatan pribadi.
 
-Dibuat dengan Expo SDK 58 + React Native + TypeScript. Data tersimpan di HP (SQLite),
-tanpa akun dan tanpa server. Satu-satunya koneksi keluar adalah Gemini, dan hanya kalau
-kamu menekan tombol AI.
+Foto struk → Gemini/OCR membaca nama toko, tanggal, item satu per satu, dan total →
+kamu koreksi seperlunya → tersimpan di dompet → cetak sebagai struk kasir atau ekspor CSV.
 
-## Yang sudah jadi
+Data di HP (SQLite), tanpa akun, tanpa cloud. Koneksi keluar hanya ke Gemini saat kamu
+memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
+
+## Fitur
 
 | Fitur | Status |
 | --- | --- |
-| Dinas (trip) + total + anggaran | selesai |
-| Catat biaya manual, kategori, catatan, metode bayar | selesai |
-| Kamera + kompres foto + thumbnail | selesai |
-| OCR lokal ML Kit + parser struk Indonesia | selesai (butuh build) |
-| Review otomatis: merchant, tanggal, total, pajak, kategori | selesai (butuh build) |
-| AI Gemini opsional (BYOK) + pemilihan saat nominal beda | selesai |
-| Laporan PDF lengkap (kop, tanda tangan, lampiran struk) | selesai |
-| Laporan PDF ringkas, JPG, CSV, print | selesai |
-| Backup/restore ZIP + sampah (hapus lembut) | selesai |
+| Dompet (warna, saldo awal, total, progres) | selesai |
+| Catat pengeluaran manual | selesai |
+| Kamera, kompres foto, thumbnail | selesai |
+| Gemini otomatis saat kunci API terisi | selesai |
+| OCR lokal ML Kit sebagai cadangan | selesai (butuh build) |
+| Item per produk: nama, qty, harga, tambah/hapus/edit | selesai |
+| Total otomatis dari item + pajak, bisa ditimpa | selesai |
+| Cetak struk gaya kasir (PDF / gambar / print) | selesai |
+| CSV untuk Excel | selesai |
+| Backup/restore ZIP, sampah, hapus lembut | selesai |
+| Kategori custom, kunci aplikasi, mode gelap | selesai |
 | Deteksi duplikat, sapu file yatim, migrasi DB | selesai |
-| Kunci aplikasi (biometrik/PIN) | selesai |
-| Uji parser 13 fixture + uji uang/tanggal | lulus 19 tes |
+| Tes: parser 13 fixture, uang, tanggal, migrasi SQL | 23 tes lulus |
 
 ## Menjalankan
 
 ```bash
 npm install
-npm start          # Expo Go: semua fitur kecuali OCR kamera
+npm start          # Expo Go: semua jalan kecuali OCR kamera & simpan gambar
 ```
 
-OCR kamera **tidak jalan di Expo Go** karena ML Kit adalah modul native. Aplikasi tetap
-mendeteksi hal ini dan menampilkan pesan; input manual + foto + laporan tetap normal.
+OCR kamera butuh build karena ML Kit adalah modul native. Aplikasi mendeteksi hal ini.
 
-## Membuat APK (OCR aktif)
-
-Sekali saja:
+## Build APK
 
 ```bash
 npm i -g eas-cli
@@ -44,54 +43,46 @@ eas login
 eas build -p android --profile preview
 ```
 
-EAS memberi link APK saat selesai. Pasang di HP, buka, lalu:
-
-1. Pengaturan â†’ Identitas pelapor â†’ isi nama, NIP, perusahaan â†’ Simpan.
-2. Pengaturan â†’ AI (opsional) â†’ tempel kunci Gemini dari https://aistudio.google.com/apikey â†’ Simpan kunci â†’ Tes kunci.
-3. Beranda â†’ Foto Struk.
-
-Kalau tidak punya kunci AI, semua fitur lain tetap jalan. OCR lokal tidak butuh kunci.
+Profil `preview` hanya membangun **arm64-v8a** (semua HP Android modern) dengan R8 dan
+resource shrinking, supaya ukuran APK turun jauh dibanding build universal.
 
 ## Struktur
 
 ```
-src/app/            layar (expo-router)
-  (tabs)/           Beranda, Biaya, Pengaturan
-  capture.tsx       kamera
-  review.tsx        form + OCR + AI + simpan
-  trip/[id].tsx     detail dinas + export
-  backup.tsx        backup, restore, sampah
-src/db/             skema, migrasi, query
-src/ocr/            ML Kit (lazy) + parser + fixtures
-src/ai/             Gemini: prompt, skema, error handling
-src/report/         template HTML (PDF/print) + pratinjau native + export
-src/storage/        foto, backup ZIP
-src/ui/             komponen dasar
+src/app/              layar (expo-router)
+  (tabs)/             Beranda, Biaya, Pengaturan
+  settings/           profil, AI, dompet, kategori
+  review.tsx          editor struk + item + AI
+  wallet/[id].tsx     detail dompet + ekspor
+src/db/               skema, migrasi, query, tes migrasi
+src/ocr/              ML Kit (lazy) + parser item + fixtures
+src/ai/               Gemini: prompt, skema JSON, error
+src/receipt/          HTML struk 80mm + PDF/JPG/print/CSV
+src/storage/          foto + backup ZIP
+src/ui/               komponen dasar
 ```
 
 ## Perintah
 
 ```bash
 npm run check      # typecheck + lint + test
-npm test           # hanya unit test parser/uang/tanggal
+npm test
 npm run typecheck
 ```
 
-Kalau menambah atau menghapus dependency, jalankan `npx npm@10 install`, bukan `npm install`.
-Server EAS memakai npm 10; lockfile dari npm 11 bisa ditolak dengan error
-`Missing: ... from lock file`.
+Kalau mengubah dependency, pakai `npx npm@10 install` supaya lockfile cocok dengan npm di
+server EAS.
 
-## Batasan yang diketahui
+## Batasan
 
-- Database **tidak terenkripsi**. Backup ZIP juga tanpa sandi. Simpan di Drive pribadi.
-- Gambar JPG dibuat dari pratinjau 1:1 di dalam aplikasi; untuk lebih dari ~25 struk pakai PDF.
-- Parser memakai heuristik. Struk pudar bisa salah; semua field bisa diedit dan foto tetap bukti.
-- Satu struk = satu catatan (total saja), bukan per item.
-- Belum ada cloud sync, approval finance, atau multi-currency.
+- Database dan backup ZIP tidak dienkripsi. Simpan backup di Drive pribadi.
+- Satu struk = satu catatan; item di dalamnya boleh banyak.
+- Item dibaca dari teks/gambar, bisa salah pada struk pudar. Semua bisa diedit.
+- APK hanya arm64. Perangkat lama 32-bit tidak didukung.
+- Belum ada cloud sync atau multi-user.
 
 ## Privasi
 
-Foto struk tidak pernah keluar dari HP kecuali kamu menekan "Baca ulang dengan AI".
-Saat itu foto dikirim langsung dari HP ke Google Gemini memakai kunci API milikmu.
-Kunci disimpan di Android Keystore / iOS Keychain lewat `expo-secure-store`, tidak pernah
-ditulis ke database, log, atau laporan.
+Foto struk tidak keluar dari HP kecuali fitur Gemini aktif dan kamu sudah menyetujui.
+Saat itu foto dikirim langsung ke Google memakai kunci API milikmu. Kunci disimpan di
+Android Keystore / iOS Keychain, tidak pernah ditulis ke database, log, atau ekspor.

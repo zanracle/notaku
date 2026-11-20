@@ -1,82 +1,59 @@
-﻿# Rencana & Status â€” NotaKu
+﻿# Rencana & Status — NotaKu
 
-Dokumen kerja. Diperbarui saat implementasi. README untuk cara pakai.
+Dokumen kerja. README untuk cara pakai.
 
-## Keputusan terkunci
+## Riwayat versi
 
-| Item | Nilai |
-| --- | --- |
-| Stack | Expo SDK 58, React Native, TypeScript, expo-router |
-| Nama / paket | NotaKu / `com.notaku.app` |
-| Penyimpanan | SQLite lokal + file di `documentDirectory` |
-| Uang | integer rupiah, maksimal Rp 50.000.000 per catatan |
-| OCR | `@infinitered/react-native-mlkit-text-recognition`, lazy require, guard Expo Go |
-| AI | Gemini, BYOK, model `gemini-3.5-flash-lite` (bisa diganti) |
-| Ambang AI | confidence < 60, atau selisih total > 5% |
-| Backup | ZIP tanpa sandi, pengingat 7 hari |
-| Laporan | PDF lengkap, PDF ringkas, JPG, CSV, print |
+### v1.0 (2026-11-19) — dasar
+Expo SDK 58, SQLite lokal, OCR ML Kit, Gemini BYOK, laporan PDF formal, backup ZIP.
+APK universal 167 MB.
 
-## Milestone
+### v1.1 (2026-11-20) — arah baru
+User meminta: UI lebih hidup, Gemini otomatis, item per produk, cetak gaya struk,
+dinas diganti dompet, ikon sendiri, dan APK di bawah 50 MB.
 
-- [x] **M0** scaffold, tema, navigasi, SQLite + migrasi v1
-- [x] **M1** dinas, biaya manual, total, cari/filter, hapus lembut
-- [x] **M2** kamera, kompres, thumbnail, lampiran galeri
-- [x] **M2b** backup/restore ZIP, deteksi duplikat, sapu file yatim
-- [x] **M3** ML Kit + parser + confidence + review (kode)
-- [x] **M3b** Gemini BYOK, tes kunci, pemilihan angka, `ai_usage`
-- [x] **M4** PDF/JPG/CSV/print, status terkirim
-- [x] **M5a** build APK cloud berhasil (ML Kit ikut terkompilasi)
-- [ ] **M5b** uji di HP + kirim satu dinas nyata
+Yang berubah:
 
-APK: https://expo.dev/artifacts/eas/qonYdfiNPGk1eftrN9judjZTFoSCi20opReWossxJP4.apk
-Build: https://expo.dev/accounts/zanracle/projects/notaku/builds/dae2f822-3442-4d19-80ad-06a7f61b4bff
-Dibuat: 2026-11-19 17:56 UTC, 167 MB (universal APK, semua ABI).
+- **Dompet** menggantikan dinas. Migrasi v2: tabel `wallets`, `expenses.wallet_id`,
+  pembangunan ulang tabel `expenses` agar `trip_id` hilang. Diuji dengan `node:sqlite`
+  lewat `src/db/schema.test.mjs` (3 kasus, termasuk FK).
+- **Item per produk** di tabel `expense_items` (nama, qty, harga, urutan). Parser lokal
+  dan prompt Gemini sama-sama mengisi item. Editor bisa tambah/hapus/ubah; total otomatis.
+- **Gemini otomatis** kalau kunci ada dan `ai_auto=1`. OCR lokal jalan lebih dulu sebagai
+  jaring pengaman. Persetujuan sekali saat pertama memakai.
+- **Cetak struk kasir**: HTML 80mm monospace, satu struk per halaman; pratinjau native
+  1:1 untuk ekspor JPG. Laporan formal lama dihapus.
+- **UI baru**: palet krem–hijau tua–amber, kartu radius 24, tab bar kustom, animasi tekan,
+  haptik, grafik 7 hari, pengaturan dipecah jadi sub-halaman.
+- **Ikon** dibuat di FigCraft dan diekspor 1024 px (bukan hasil model gambar yang gagal).
+- **Ukuran**: buang 5 dependensi tak terpakai (`@expo/ui`, `expo-device`,
+  `expo-glass-effect`, `expo-symbols`, `expo-web-browser`), R8 + resource shrinking,
+  build arm64-only lewat `gradleCommand`.
 
-Definisi selesai M3 yang belum bisa saya buktikan tanpa HP: akurasi total pada 10 struk
-fisik â‰¥ 7/10 tanpa koreksi. Fixture sintetis lulus 13/13.
+## Verifikasi
 
-## Verifikasi yang sudah dijalankan
+- `tsc --noEmit`, `eslint`, `expo-doctor` (20/20) bersih
+- `vitest`: 23 tes (13 fixture struk + item, uang, tanggal, 3 tes migrasi SQL)
+- `expo export -p android` sukses
 
-- `tsc --noEmit` bersih
-- `eslint .` bersih
-- `vitest` 19 tes lulus (13 fixture struk + uang + tanggal)
-- `expo export -p android` sukses (bundle 3.8 MB, semua modul resolve)
-- `npx expo-doctor` 20/20 checks lulus
-- commit awal git `ff1d45a`
+## Catatan desain
 
-Belum dijalankan (butuh perangkat/rekayasa): kamera, ML Kit, PDF nyata, share sheet,
-print, biometrik, backup ke Drive, restore di HP lain.
+Empat layar dirancang di FigCraft lebih dulu (Beranda, Dompet, Periksa struk, Pengaturan),
+lalu diimplementasikan. Palet dan radius mengikuti file desain itu.
 
-## Saat kembali â€” checklist 15 menit
+## Saat kembali — uji cepat
 
-1. `cd notaku`
-2. `npm run check`
-3. `npm i -g eas-cli && eas login`
-4. `eas build -p android --profile preview` (APK, Â±10 menit)
-5. Pasang APK di HP
-6. Pengaturan â†’ isi identitas, logo, kategori
-7. Pengaturan â†’ AI â†’ tempel kunci Gemini â†’ Tes kunci
-8. Foto 10 struk berturut-turut, koreksi bila perlu
-9. Buka dinas â†’ Export PDF lengkap â†’ cek gambar struk
-10. Kirim ke finance, lalu "Tandai terkirim"
-11. Backup â†’ simpan ZIP ke Drive
-12. Tutup aplikasi, buka lagi, pastikan data masih ada
+1. Pasang APK baru.
+2. Pengaturan → Gemini → tempel kunci → Tes kunci.
+3. Foto satu struk berisi beberapa barang → cek item muncul satu per satu.
+4. Hapus satu item → total ikut turun (kalau belum menyentuh kolom total).
+5. Simpan → buka dompet → Ekspor → cetak struk → cek bentuknya seperti struk kasir.
+6. Backup → simpan ZIP.
 
-## Kalau ada bug
+## Risiko
 
-- OCR kosong padahal build: cek `eas build` memakai profil `preview`, bukan Expo Go.
-- AI 403: kunci salah atau Gemini API belum aktif di project Google.
-- PDF tanpa gambar: cek `receipt_path` ada, lalu jalankan restore/backup untuk melihat file.
-- Laporan JPG gagal: turunkan jumlah struk atau pakai PDF.
-
-## Yang sengaja tidak dibuat
-
-Cloud sync, login, portal approval, grafik, integrasi accounting, multi-currency,
-split per item, i18n, auto-update APK, enkripsi database.
-
-
-## Risiko build yang belum bisa dibuktikan
-
-ML Kit dibangun sebagai Expo module (`@infinitered/react-native-mlkit-text-recognition`), jadi peluang build sukses tinggi, tapi belum pernah dikompilasi di perangkat nyata. Kalau EAS build gagal di bagian ini, aplikasi tetap berguna tanpa OCR: hapus dependensi ML Kit, dan semua alur manual + foto + laporan tetap jalan. Jangan hapus sebelum mencoba build sekali.
-
-
+- R8 bisa memangkas kelas ML Kit. Kalau OCR mati setelah build baru, matikan
+  `enableProguardInReleaseBuilds` lalu build ulang.
+- Migrasi menghapus tabel `expenses` lama. Sudah diuji, tapi tetap: minta user membuat
+  backup sebelum update kalau ada data penting.
+- Build hanya arm64.
