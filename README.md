@@ -1,12 +1,15 @@
 ﻿# NotaKu
 
-Pencatat pengeluaran dari foto struk. Untuk reimburse kantor maupun catatan pribadi.
+Pencatat pengeluaran dari foto struk. Gratis, tanpa akun, tanpa iklan.
 
-Foto struk → Gemini membaca nama toko, tanggal, item satu per satu, dan total →
+**Unduh:** halaman Releases repo ini → `NotaKu-<versi>.apk`.
+APK ditandatangani dan bisa di-install langsung di Android 64-bit.
+
+Foto struk → OCR di HP membaca nama toko, tanggal, item satu per satu, dan total →
 kamu koreksi seperlunya → tersimpan di dompet → cetak sebagai struk kasir atau ekspor CSV.
 
-Data di HP (SQLite), tanpa akun, tanpa cloud. Koneksi keluar hanya ke Gemini saat kamu
-memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
+Data di HP (SQLite), tanpa akun, tanpa cloud. Pembacaan struk memakai OCR di perangkat
+(gratis, offline). Gemini hanya dipakai kalau kamu memasukkan kunci API sendiri.
 
 ## Fitur
 
@@ -15,7 +18,8 @@ memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
 | Dompet (warna, saldo awal, total, progres) | selesai |
 | Catat pengeluaran manual | selesai |
 | Kamera, kompres foto, thumbnail | selesai |
-| Gemini otomatis saat kunci API terisi | selesai |
+| OCR di perangkat (gratis, tanpa kunci) | selesai |
+| Gemini otomatis sebagai peningkatan (BYOK) | selesai |
 | Item per produk: nama, qty, harga, tambah/hapus/edit | selesai |
 | Total otomatis dari item + pajak, bisa ditimpa | selesai |
 | Cetak struk gaya kasir (PDF / gambar / print) | selesai |
@@ -29,10 +33,13 @@ memakai fitur AI, dan hanya setelah kamu menyetujui sekali.
 
 ```bash
 npm install
-npm start          # Expo Go: semua jalan kecuali simpan gambar
+npm start          # Expo Go: semua jalan kecuali OCR kamera & simpan gambar
 ```
 
-Tanpa kunci Gemini, foto tetap tersimpan sebagai bukti tetapi item dan nominal diisi manual.
+## Rilis publik
+
+Lihat [RELEASE.md](RELEASE.md). Ringkasnya: push tag `v*` → GitHub Actions membangun APK
+bertanda tangan dan menaruhnya di Releases. Gratis untuk repo publik.
 
 ## Build APK
 

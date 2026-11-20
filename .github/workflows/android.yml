@@ -1,0 +1,68 @@
+name: Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native project
+        run: npx expo prebuild -p android --no-install
+
+      - name: Restore signing key
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/notaku.keystore
+
+      - name: Build release APK
+        env:
+          NOTAKU_KEYSTORE_PATH: notaku.keystore
+          NOTAKU_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          NOTAKU_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          NOTAKU_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+      - name: Rename APK
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          cp android/app/build/outputs/apk/release/app-release.apk "NotaKu-$VERSION.apk"
+          ls -lh "NotaKu-$VERSION.apk"
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: NotaKu-*.apk
+          generate_release_notes: true
+
+      - name: Upload artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: notaku-apk
+          path: NotaKu-*.apk

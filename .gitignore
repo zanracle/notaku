@@ -45,3 +45,8 @@ example
 # local build output / preview
 dist-test/
 report-preview.html
+
+# signing
+credentials/
+*.keystore
+*.jks
