@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
-import { View } from 'react-native';
+import { Image , View } from 'react-native';
 
 import type { Expense } from '@/db/queries';
 import { formatDateID } from '@/lib/dates';
@@ -51,7 +50,7 @@ export function ExpenseRow({
         <Image
           source={{ uri: expense.thumbPath ?? expense.receiptPath ?? '' }}
           style={{ width: 44, height: 44, borderRadius: radii.md, backgroundColor: theme.cardAlt }}
-          contentFit="cover"
+          resizeMode="cover"
         />
       ) : (
         <View

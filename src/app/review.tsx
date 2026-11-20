@@ -1,10 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { File } from 'expo-file-system';
-import { Image } from 'expo-image';
+import { Image , Alert, Modal, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Modal, TextInput, View } from 'react-native';
 
 import { askGemini, aiErrorMessage, getApiKey, type AiReceipt } from '@/ai/gemini';
 import { ReceiptSheet } from '@/components/receipt-sheet';
@@ -390,7 +389,7 @@ export default function ReviewScreen() {
             <Image
               source={{ uri: photoUri }}
               style={{ width: 82, height: 108, borderRadius: radii.md, backgroundColor: theme.cardAlt }}
-              contentFit="cover"
+              resizeMode="cover"
             />
           ) : (
             <View
