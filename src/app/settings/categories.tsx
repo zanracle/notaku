@@ -13,7 +13,7 @@ import {
   ScreenHeader,
   Txt,
 } from '@/ui/components';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function CategoriesScreen() {
   const theme = useTheme();
@@ -108,3 +108,4 @@ export default function CategoriesScreen() {
     </Screen>
   );
 }
+

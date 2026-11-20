@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -48,7 +48,7 @@ export default function BackupScreen() {
       await shareFile(result.path, 'application/zip', 'Simpan backup ke Drive');
       Alert.alert(
         'Backup dibuat',
-        `${result.fileName}\n${result.sizeKb} KB · ${result.photos} foto.\n\nSimpan ke Drive atau kirim ke diri sendiri.`,
+        `${result.fileName}\n${result.sizeKb} KB Â· ${result.photos} foto.\n\nSimpan ke Drive atau kirim ke diri sendiri.`,
       );
     } catch (error) {
       Alert.alert('Backup gagal', (error as Error).message);
@@ -176,7 +176,7 @@ export default function BackupScreen() {
                     {expense.merchant}
                   </Txt>
                   <Txt variant="small" color={theme.textMuted}>
-                    {formatDateID(expense.date)} · {formatRupiah(expense.amount)}
+                    {formatDateID(expense.date)} Â· {formatRupiah(expense.amount)}
                   </Txt>
                 </View>
                 <PressableScale
@@ -206,3 +206,4 @@ export default function BackupScreen() {
     </Screen>
   );
 }
+

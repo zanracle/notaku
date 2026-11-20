@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SplashScreen from 'expo-splash-screen';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -185,3 +185,4 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
     </View>
   );
 }
+

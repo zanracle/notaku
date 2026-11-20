@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
@@ -108,7 +108,7 @@ export default function WalletsScreen() {
                   <Txt variant="section">{wallet.name}</Txt>
                   <Txt variant="small" color={theme.textMuted}>
                     {stat.count} catatan
-                    {wallet.budget ? ` · saldo awal ${formatRupiah(wallet.budget)}` : ''}
+                    {wallet.budget ? ` Â· saldo awal ${formatRupiah(wallet.budget)}` : ''}
                   </Txt>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
@@ -162,3 +162,4 @@ export default function WalletsScreen() {
     </Screen>
   );
 }
+

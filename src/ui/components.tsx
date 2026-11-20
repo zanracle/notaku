@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
@@ -697,5 +697,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
   amount: { fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });
+
 
 

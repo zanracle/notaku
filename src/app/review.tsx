@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { File } from 'expo-file-system';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -109,7 +109,7 @@ export default function ReviewScreen() {
     setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
     setConfidence(parsed.confidence);
     setSource('ocr');
-    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Â· ') : null);
+    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Ã‚Â· ') : null);
   };
 
   const applyAi = (ai: AiReceipt) => {
@@ -125,7 +125,7 @@ export default function ReviewScreen() {
     if (ai.items.length > 0) {
       setItems(ai.items.map((item) => ({ key: newId('tmp'), name: item.name, qty: item.qty || 1, price: item.price })));
     }
-    setNotice(`Dibaca Gemini Â· keyakinan ${ai.confidence}%`);
+    setNotice(`Dibaca Gemini Ã‚Â· keyakinan ${ai.confidence}%`);
   };
 
   const readWithAi = useCallback(
@@ -380,7 +380,7 @@ export default function ReviewScreen() {
       }>
       <ScreenHeader
         title={existing ? 'Ubah struk' : 'Periksa struk'}
-        subtitle={aiBusy ? 'Gemini membacaâ€¦' : reading ? 'Membaca strukâ€¦' : 'Semua kolom bisa diedit'}
+        subtitle={aiBusy ? 'Gemini membacaÃ¢â‚¬Â¦' : reading ? 'Membaca strukÃ¢â‚¬Â¦' : 'Semua kolom bisa diedit'}
         onBack={() => router.back()}
       />
 
@@ -426,7 +426,7 @@ export default function ReviewScreen() {
           </Txt>
           {aiBusy ? (
             <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-              Menyalin item satu per satuâ€¦
+              Menyalin item satu per satuÃ¢â‚¬Â¦
             </Txt>
           ) : null}
         </View>
@@ -613,7 +613,7 @@ export default function ReviewScreen() {
               <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
               <Txt variant="title">Tersimpan</Txt>
               <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-                {merchant} Â· {formatRupiah(amount ?? 0)}
+                {merchant} Ã‚Â· {formatRupiah(amount ?? 0)}
               </Txt>
             </View>
             <AppButton
@@ -651,7 +651,7 @@ export default function ReviewScreen() {
                   {dup.expense.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted}>
-                  {dup.expense.date} Â· {formatRupiah(dup.expense.amount)}
+                  {dup.expense.date} Ã‚Â· {formatRupiah(dup.expense.amount)}
                 </Txt>
               </Card>
             ) : null}
@@ -670,5 +670,6 @@ export default function ReviewScreen() {
     </Screen>
   );
 }
+
 
 

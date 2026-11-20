@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { View } from 'react-native';
 
@@ -72,7 +72,7 @@ export function ExpenseRow({
           {expense.merchant}
         </Txt>
         <Txt variant="small" color={theme.textMuted} numberOfLines={1}>
-          {subtitle ?? `${formatDateID(expense.date)} · ${expense.category}`}
+          {subtitle ?? `${formatDateID(expense.date)} Â· ${expense.category}`}
         </Txt>
       </View>
 
@@ -82,3 +82,4 @@ export function ExpenseRow({
     </PressableScale>
   );
 }
+

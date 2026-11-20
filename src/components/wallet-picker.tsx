@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
 import { Modal, ScrollView, View } from 'react-native';
 
@@ -192,3 +192,4 @@ export function WalletPicker({
     </View>
   );
 }
+
