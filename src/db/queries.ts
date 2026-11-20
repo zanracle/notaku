@@ -166,40 +166,47 @@ async function insertItems(
   }
 }
 
+function assertParams(sql: string, params: unknown[]): void {
+  const count = (sql.match(/\?/g) ?? []).length;
+  if (count !== params.length) {
+    throw new Error(`Parameter SQL tidak cocok: ${count} placeholder, ${params.length} nilai.`);
+  }
+}
+
 export async function createExpense(input: ExpenseInput): Promise<Expense> {
   const db = await getDb();
   const id = newId('exp');
   const ts = now();
+  const sql = `INSERT INTO expenses (id, wallet_id, merchant, date, amount, subtotal, tax, category, note,
+      payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence,
+      status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const params = [
+    id,
+    input.walletId,
+    input.merchant.trim() || 'Tanpa nama',
+    input.date,
+    input.amount,
+    input.subtotal ?? null,
+    input.tax ?? 0,
+    input.category,
+    input.note?.trim() || null,
+    input.paymentMethod?.trim() || null,
+    input.receiptPath ?? null,
+    input.thumbPath ?? null,
+    input.receiptHash ?? null,
+    input.ocrText ?? null,
+    input.aiJson ?? null,
+    input.source ?? 'manual',
+    input.confidence ?? null,
+    'draft',
+    ts,
+    ts,
+  ];
+  assertParams(sql, params);
+
   await db.withExclusiveTransactionAsync(async (tx) => {
-    await tx.runAsync(
-      `INSERT INTO expenses (id, wallet_id, merchant, date, amount, subtotal, tax, category, note,
-         payment_method, receipt_path, thumb_path, receipt_hash, ocr_text, ai_json, source, confidence,
-         status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        input.walletId,
-        input.walletId,
-        input.merchant.trim() || 'Tanpa nama',
-        input.date,
-        input.amount,
-        input.subtotal ?? null,
-        input.tax ?? 0,
-        input.category,
-        input.note?.trim() || null,
-        input.paymentMethod?.trim() || null,
-        input.receiptPath ?? null,
-        input.thumbPath ?? null,
-        input.receiptHash ?? null,
-        input.ocrText ?? null,
-        input.aiJson ?? null,
-        input.source ?? 'manual',
-        input.confidence ?? null,
-        'draft',
-        ts,
-        ts,
-      ],
-    );
+    await tx.runAsync(sql, params);
     await insertItems(tx, id, input.items ?? []);
   });
   const expense = await getExpense(id);
@@ -214,33 +221,35 @@ export async function updateExpense(
   const db = await getDb();
   const current = await getExpense(id);
   if (!current) throw new Error('Catatan tidak ditemukan');
+
+  const sql = `UPDATE expenses SET wallet_id = ?, merchant = ?, date = ?, amount = ?, subtotal = ?, tax = ?,
+      category = ?, note = ?, payment_method = ?, receipt_path = ?, thumb_path = ?, receipt_hash = ?,
+      ocr_text = ?, ai_json = ?, source = ?, confidence = ?, updated_at = ?
+    WHERE id = ?`;
+  const params = [
+    patch.walletId ?? current.walletId,
+    (patch.merchant ?? current.merchant).trim() || 'Tanpa nama',
+    patch.date ?? current.date,
+    patch.amount ?? current.amount,
+    patch.subtotal !== undefined ? patch.subtotal : current.subtotal,
+    patch.tax ?? current.tax,
+    patch.category ?? current.category,
+    patch.note !== undefined ? patch.note?.trim() || null : current.note,
+    patch.paymentMethod !== undefined ? patch.paymentMethod?.trim() || null : current.paymentMethod,
+    patch.receiptPath !== undefined ? patch.receiptPath : current.receiptPath,
+    patch.thumbPath !== undefined ? patch.thumbPath : current.thumbPath,
+    patch.receiptHash !== undefined ? patch.receiptHash : current.receiptHash,
+    patch.ocrText !== undefined ? patch.ocrText : current.ocrText,
+    patch.aiJson !== undefined ? patch.aiJson : current.aiJson,
+    patch.source ?? current.source,
+    patch.confidence !== undefined ? patch.confidence : current.confidence,
+    now(),
+    id,
+  ];
+  assertParams(sql, params);
+
   await db.withExclusiveTransactionAsync(async (tx) => {
-    await tx.runAsync(
-      `UPDATE expenses SET wallet_id = ?, merchant = ?, date = ?, amount = ?, subtotal = ?, tax = ?,
-         category = ?, note = ?, payment_method = ?, receipt_path = ?, thumb_path = ?, receipt_hash = ?,
-         ocr_text = ?, ai_json = ?, source = ?, confidence = ?, updated_at = ?
-       WHERE id = ?`,
-      [
-        patch.walletId ?? current.walletId,
-        (patch.merchant ?? current.merchant).trim() || 'Tanpa nama',
-        patch.date ?? current.date,
-        patch.amount ?? current.amount,
-        patch.subtotal !== undefined ? patch.subtotal : current.subtotal,
-        patch.tax ?? current.tax,
-        patch.category ?? current.category,
-        patch.note !== undefined ? patch.note?.trim() || null : current.note,
-        patch.paymentMethod !== undefined ? patch.paymentMethod?.trim() || null : current.paymentMethod,
-        patch.receiptPath !== undefined ? patch.receiptPath : current.receiptPath,
-        patch.thumbPath !== undefined ? patch.thumbPath : current.thumbPath,
-        patch.receiptHash !== undefined ? patch.receiptHash : current.receiptHash,
-        patch.ocrText !== undefined ? patch.ocrText : current.ocrText,
-        patch.aiJson !== undefined ? patch.aiJson : current.aiJson,
-        patch.source ?? current.source,
-        patch.confidence !== undefined ? patch.confidence : current.confidence,
-        now(),
-        id,
-      ],
-    );
+    await tx.runAsync(sql, params);
     if (patch.items) {
       await tx.runAsync('DELETE FROM expense_items WHERE expense_id = ?', [id]);
       await insertItems(tx, id, patch.items);

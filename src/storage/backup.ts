@@ -166,10 +166,9 @@ export async function restoreBackup(zipUri: string): Promise<RestoreResult> {
         `INSERT OR IGNORE INTO expenses (id, wallet_id, merchant, date, amount, subtotal, tax,
            currency, rate, category, note, payment_method, receipt_path, thumb_path, receipt_hash,
            ocr_text, ai_json, source, confidence, status, sent_at, deleted_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           expense.id,
-          walletId,
           walletId,
           expense.merchant ?? 'Tanpa nama',
           expense.date ?? now.slice(0, 10),
