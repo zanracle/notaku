@@ -1,4 +1,4 @@
-name: Android APK
+﻿name: Android APK
 
 on:
   push:
@@ -39,6 +39,7 @@ jobs:
 
       - name: Build release APK
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           NOTAKU_KEYSTORE_PATH: notaku.keystore
           NOTAKU_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           NOTAKU_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
