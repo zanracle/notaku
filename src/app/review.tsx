@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { File } from 'expo-file-system';
-import { Image , Alert, Modal, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Image, Modal, TextInput, View } from 'react-native';
 
 import { askGemini, aiErrorMessage, getApiKey, type AiReceipt } from '@/ai/gemini';
 import { ReceiptSheet } from '@/components/receipt-sheet';
@@ -16,6 +16,7 @@ import {
   listItems,
   listWallets,
   logAiUsage,
+  merchantSuggestions,
   recentWalletId,
   softDeleteExpense,
   updateExpense,
@@ -23,8 +24,10 @@ import {
   type Expense,
   type ExpenseItem,
   type ItemInput,
+  type MerchantMemory,
   type Wallet,
 } from '@/db/queries';
+import { captureQueueLength, shiftCapture } from '@/lib/capture-queue';
 import { isValidISODate, todayISO } from '@/lib/dates';
 import { newId } from '@/lib/id';
 import { MAX_AMOUNT } from '@/lib/defaults';
@@ -59,7 +62,7 @@ function toDraft(items: { id: string; name: string; qty: number; price: number }
 export default function ReviewScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ photoUri?: string; expenseId?: string; walletId?: string }>();
+  const params = useLocalSearchParams<{ photoUri?: string; expenseId?: string; walletId?: string; bulk?: string }>();
   const { settings, categories, set } = useApp();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -87,6 +90,10 @@ export default function ReviewScreen() {
   const [saved, setSaved] = useState<{ id: string; walletId: string } | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptItems, setReceiptItems] = useState<ExpenseItem[]>([]);
+  const [suggestions, setSuggestions] = useState<MerchantMemory[]>([]);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
+
+  const bulk = params.bulk === '1';
 
   const booted = useRef(false);
   const dupAcknowledged = useRef(false);
@@ -108,7 +115,7 @@ export default function ReviewScreen() {
     setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
     setConfidence(parsed.confidence);
     setSource('ocr');
-    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Ã‚Â· ') : null);
+    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Ãƒâ€šÃ‚Â· ') : null);
   };
 
   const applyAi = (ai: AiReceipt) => {
@@ -124,7 +131,7 @@ export default function ReviewScreen() {
     if (ai.items.length > 0) {
       setItems(ai.items.map((item) => ({ key: newId('tmp'), name: item.name, qty: item.qty || 1, price: item.price })));
     }
-    setNotice(`Dibaca Gemini Ã‚Â· keyakinan ${ai.confidence}%`);
+    setNotice(`Dibaca Gemini · keyakinan ${ai.confidence}%`);
   };
 
   const readWithAi = useCallback(
@@ -182,8 +189,7 @@ export default function ReviewScreen() {
     [readWithAi, settings.ai_auto, settings.ai_consent_at, set],
   );
 
-  const retryAi = async () => {
-    if (!photoUri) return;
+  const retryAi = async () => {    if (!photoUri) return;
     if (!settings.ai_consent_at) {
       const ok = await new Promise<boolean>((resolve) => {
         Alert.alert(
@@ -200,6 +206,56 @@ export default function ReviewScreen() {
       await set('ai_consent_at', new Date().toISOString());
     }
     await readWithAi(photoUri, ocrText);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    const value = merchant.trim();
+    if (value.length < 2) {
+      setSuggestions([]);
+      return () => {
+        alive = false;
+      };
+    }
+    const timer = setTimeout(async () => {
+      const rows = await merchantSuggestions(value).catch(() => [] as MerchantMemory[]);
+      if (alive) {
+        setSuggestions(
+          rows.filter((row) => row.merchant.toLowerCase() !== value.toLowerCase()).slice(0, 3),
+        );
+      }
+    }, 180);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [merchant]);
+
+  const pickSuggestion = (memory: MerchantMemory) => {
+    setMerchant(memory.merchant);
+    setCategory(memory.lastCategory);
+    if (!amount) setAmount(memory.lastAmount);
+    setSuggestions([]);
+  };
+
+  const resetForNext = (uri: string) => {
+    setExisting(null);
+    setMerchant('');
+    setAmount(null);
+    setTax(null);
+    setNote('');
+    setItems([]);
+    setOcrText(null);
+    setAiJson(null);
+    setSource('manual');
+    setConfidence(null);
+    setDate(todayISO());
+    setCategory(settings.default_category || 'Lain-lain');
+    setPhotoUri(uri);
+    setSaved(null);
+    setDup(null);
+    setBulkNotice('Tersimpan. Lanjut ke struk berikutnya…');
+    readPhoto(uri).catch(() => undefined);
   };
 
   useEffect(() => {
@@ -326,6 +382,14 @@ export default function ReviewScreen() {
       if (existing) await updateExpense(id, payload);
       else await createExpense(payload);
 
+      if (bulk) {
+        const next = shiftCapture();
+        if (next) {
+          resetForNext(next);
+          return;
+        }
+      }
+
       setSaved({ id, walletId: walletId as string });
     } catch (error) {
       Alert.alert('Gagal menyimpan', (error as Error).message);
@@ -398,9 +462,26 @@ export default function ReviewScreen() {
       }>
       <ScreenHeader
         title={existing ? 'Ubah struk' : 'Periksa struk'}
-        subtitle={aiBusy ? 'Gemini membacaÃ¢â‚¬Â¦' : reading ? 'Membaca strukÃ¢â‚¬Â¦' : 'Semua kolom bisa diedit'}
+        subtitle={aiBusy ? 'Gemini membaca…' : reading ? 'Membaca struk…' : 'Semua kolom bisa diedit'}
         onBack={() => router.back()}
       />
+
+      {bulk ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: theme.mint,
+            borderRadius: radii.lg,
+            padding: space.md,
+          }}>
+          <Ionicons name="albums-outline" size={16} color={theme.primary} />
+          <Txt variant="small" color={theme.primary} style={{ flex: 1 }}>
+            {bulkNotice ?? `Mode beruntun · ${captureQueueLength()} foto tersisa`}
+          </Txt>
+        </View>
+      ) : null}
 
       <Card style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
         <PressableScale onPress={pickPhoto} haptic="selection" accessibilityLabel="Ganti foto">
@@ -444,7 +525,7 @@ export default function ReviewScreen() {
           </Txt>
           {aiBusy ? (
             <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-              Menyalin item satu per satuÃ¢â‚¬Â¦
+              Menyalin item satu per satuÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
             </Txt>
           ) : null}
         </View>
@@ -467,7 +548,7 @@ export default function ReviewScreen() {
           }}>
           <Ionicons name="sparkles" size={14} color={theme.primary} />
           <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
-            {aiBusy ? 'Gemini sedang membaca…' : 'Baca ulang dengan AI'}
+            {aiBusy ? 'Gemini sedang membacaâ€¦' : 'Baca ulang dengan AI'}
           </Txt>
         </PressableScale>
       ) : null}
@@ -479,6 +560,31 @@ export default function ReviewScreen() {
           onChangeText={setMerchant}
           placeholder="Warung Padang"
         />
+        {suggestions.length > 0 ? (
+          <View style={{ gap: 2 }}>
+            {suggestions.map((memory) => (
+              <PressableScale
+                key={memory.merchant}
+                onPress={() => pickSuggestion(memory)}
+                haptic="selection"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 4,
+                }}>
+                <Ionicons name="time-outline" size={14} color={theme.textMuted} />
+                <Txt variant="small" style={{ flex: 1, fontWeight: '600' }} numberOfLines={1}>
+                  {memory.merchant}
+                </Txt>
+                <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
+                  {memory.lastCategory} · {formatRupiah(memory.lastAmount)}
+                </Txt>
+              </PressableScale>
+            ))}
+          </View>
+        ) : null}
         <DateField label="Tanggal" value={date} onChange={setDate} />
       </Card>
 
@@ -653,7 +759,7 @@ export default function ReviewScreen() {
               <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
               <Txt variant="title">Tersimpan</Txt>
               <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-                {merchant} Ã‚Â· {formatRupiah(amount ?? 0)}
+                {merchant} Ãƒâ€šÃ‚Â· {formatRupiah(amount ?? 0)}
               </Txt>
             </View>
             <AppButton
@@ -691,7 +797,7 @@ export default function ReviewScreen() {
                   {dup.expense.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted}>
-                  {dup.expense.date} Ã‚Â· {formatRupiah(dup.expense.amount)}
+                  {dup.expense.date} Ãƒâ€šÃ‚Â· {formatRupiah(dup.expense.amount)}
                 </Txt>
               </Card>
             ) : null}
@@ -710,6 +816,8 @@ export default function ReviewScreen() {
     </Screen>
   );
 }
+
+
 
 
 

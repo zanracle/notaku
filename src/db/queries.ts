@@ -547,3 +547,200 @@ export function monthRange(iso: string = todayISO()): { from: string; to: string
   return { from: `${iso.slice(0, 7)}-01`, to: `${iso.slice(0, 7)}-${String(last).padStart(2, '0')}` };
 }
 
+/* -------------------------------- budgets --------------------------------- */
+
+export type Budget = {
+  id: string;
+  walletId: string;
+  category: string;
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const BUDGET_COLUMNS = `id, wallet_id AS walletId, category, amount, created_at AS createdAt, updated_at AS updatedAt`;
+
+export async function listBudgets(walletId?: string): Promise<Budget[]> {
+  const db = await getDb();
+  return db.getAllAsync<Budget>(
+    `SELECT ${BUDGET_COLUMNS} FROM budgets ${walletId ? 'WHERE wallet_id = ?' : ''} ORDER BY category ASC`,
+    walletId ? [walletId] : [],
+  );
+}
+
+export async function setBudget(walletId: string, category: string, amount: number): Promise<void> {
+  const db = await getDb();
+  const ts = now();
+  if (amount <= 0) {
+    await db.runAsync('DELETE FROM budgets WHERE wallet_id = ? AND category = ?', [walletId, category]);
+    return;
+  }
+  await db.runAsync(
+    `INSERT INTO budgets (id, wallet_id, category, amount, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(wallet_id, category) DO UPDATE SET amount = excluded.amount, updated_at = excluded.updated_at`,
+    [newId('bgt'), walletId, category, Math.round(amount), ts, ts],
+  );
+}
+
+export async function deleteBudget(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM budgets WHERE id = ?', [id]);
+}
+
+/* -------------------------------- templates ------------------------------- */
+
+export type Template = {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  walletId: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
+const TEMPLATE_COLUMNS = `id, name, amount, category, wallet_id AS walletId, sort_order AS sortOrder, created_at AS createdAt`;
+
+export async function listTemplates(): Promise<Template[]> {
+  const db = await getDb();
+  return db.getAllAsync<Template>(
+    `SELECT ${TEMPLATE_COLUMNS} FROM templates ORDER BY sort_order ASC, created_at ASC`,
+  );
+}
+
+export async function createTemplate(input: {
+  name: string;
+  amount: number;
+  category: string;
+  walletId: string;
+}): Promise<Template> {
+  const db = await getDb();
+  const id = newId('tpl');
+  await db.runAsync(
+    'INSERT INTO templates (id, name, amount, category, wallet_id, sort_order, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+    [id, input.name.trim(), Math.round(input.amount), input.category, input.walletId, now()],
+  );
+  const row = await db.getFirstAsync<Template>(`SELECT ${TEMPLATE_COLUMNS} FROM templates WHERE id = ?`, [id]);
+  if (!row) throw new Error('Gagal menyimpan template');
+  return row;
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM templates WHERE id = ?', [id]);
+}
+
+/* -------------------------------- analytics ------------------------------- */
+
+export type MonthTotal = { month: string; total: number };
+
+/** Total per bulan untuk N bulan terakhir (termasuk bulan berjalan), yang kosong diisi 0. */
+export async function monthlyTotals(months = 6, walletId?: string): Promise<MonthTotal[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<MonthTotal>(
+    `SELECT substr(date, 1, 7) AS month, COALESCE(SUM(amount), 0) AS total
+     FROM expenses
+     WHERE deleted_at IS NULL ${walletId ? 'AND wallet_id = ?' : ''}
+     GROUP BY substr(date, 1, 7)`,
+    walletId ? [walletId] : [],
+  );
+  const map = new Map(rows.map((r) => [r.month, r.total]));
+  const out: MonthTotal[] = [];
+  const today = new Date();
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ month: key, total: map.get(key) ?? 0 });
+  }
+  return out;
+}
+
+export type MerchantTotal = { merchant: string; total: number; count: number };
+
+export async function topMerchants(from: string, to: string, limit = 5): Promise<MerchantTotal[]> {
+  const db = await getDb();
+  return db.getAllAsync<MerchantTotal>(
+    `SELECT merchant, COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
+     FROM expenses
+     WHERE deleted_at IS NULL AND date >= ? AND date <= ?
+     GROUP BY merchant ORDER BY total DESC LIMIT ${Math.max(1, Math.floor(limit))}`,
+    [from, to],
+  );
+}
+
+export type MerchantMemory = {
+  merchant: string;
+  lastAmount: number;
+  lastCategory: string;
+  count: number;
+};
+
+/** Saran merchant dari riwayat, plus nominal & kategori terakhir. */
+export async function merchantSuggestions(prefix: string, limit = 6): Promise<MerchantMemory[]> {
+  const db = await getDb();
+  const like = `%${prefix.trim()}%`;
+  const rows = await db.getAllAsync<Expense>(
+    `SELECT ${EXPENSE_COLUMNS} FROM expenses
+     WHERE deleted_at IS NULL AND merchant LIKE ?
+     ORDER BY date DESC, created_at DESC LIMIT 200`,
+    [like],
+  );
+  const seen = new Map<string, MerchantMemory>();
+  for (const row of rows) {
+    const key = row.merchant.toLowerCase();
+    const current = seen.get(key);
+    if (current) current.count += 1;
+    else {
+      seen.set(key, {
+        merchant: row.merchant,
+        lastAmount: row.amount,
+        lastCategory: row.category,
+        count: 1,
+      });
+    }
+  }
+  return [...seen.values()].slice(0, limit);
+}
+
+/** Bersihkan sampah lebih lama dari N hari. */
+export async function purgeOldDeleted(days = 30): Promise<number> {
+  const db = await getDb();
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const result = await db.runAsync('DELETE FROM expenses WHERE deleted_at IS NOT NULL AND deleted_at < ?', [cutoff]);
+  return result.changes;
+}
+
+/* --------------------------------- demo data ------------------------------ */
+
+export async function createDemoData(): Promise<void> {
+  const wallet = await ensureDefaultWallet();
+  const today = new Date();
+  const iso = (offset: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - offset);
+    return d.toISOString().slice(0, 10);
+  };
+  const demo = [
+    { merchant: 'Warung Padang Sederhana', amount: 47000, category: 'Makan', offset: 0 },
+    { merchant: 'Kopi Senja', amount: 28000, category: 'Makan', offset: 0 },
+    { merchant: 'SPBU Pertamina', amount: 85000, category: 'BBM', offset: 1 },
+    { merchant: 'Parkir Bandara', amount: 5000, category: 'Parkir', offset: 2 },
+    { merchant: 'Indomaret', amount: 64500, category: 'Belanja', offset: 3 },
+    { merchant: 'Grab', amount: 32000, category: 'Transport', offset: 4 },
+    { merchant: 'Hotel Nusantara', amount: 650000, category: 'Penginapan', offset: 6 },
+    { merchant: 'Toko Buku Cerdas', amount: 32000, category: 'ATK', offset: 8 },
+  ];
+  for (const item of demo) {
+    await createExpense({
+      walletId: wallet.id,
+      merchant: item.merchant,
+      date: iso(item.offset),
+      amount: item.amount,
+      category: item.category,
+      source: 'manual',
+    });
+  }
+}
+
+

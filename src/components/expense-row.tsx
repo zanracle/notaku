@@ -1,27 +1,12 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image , View } from 'react-native';
 
 import type { Expense } from '@/db/queries';
+import { categoryDef } from '@/lib/defaults';
 import { formatDateID } from '@/lib/dates';
 import { formatRupiah } from '@/lib/money';
-import { radii, space, useTheme, colorForCategory } from '@/theme';
+import { radii, space, useTheme } from '@/theme';
 import { PressableScale, Txt } from '@/ui/components';
-import type { IconName } from '@/ui/components';
-
-const ICONS: Record<string, IconName> = {
-  Makan: 'restaurant',
-  Transport: 'car',
-  Belanja: 'bag-handle',
-  Penginapan: 'bed',
-  Parkir: 'car-sport',
-  BBM: 'flame',
-  ATK: 'pencil',
-  'Lain-lain': 'ellipsis-horizontal',
-};
-
-export function categoryIcon(category: string): IconName {
-  return ICONS[category] ?? 'pricetag';
-}
+import { CategoryIcon } from '@/ui/category-icon';
 
 export function ExpenseRow({
   expense,
@@ -33,7 +18,7 @@ export function ExpenseRow({
   subtitle?: string;
 }) {
   const theme = useTheme();
-  const tint = colorForCategory(expense.category);
+  const def = categoryDef(expense.category);
 
   return (
     <PressableScale
@@ -58,11 +43,11 @@ export function ExpenseRow({
             width: 44,
             height: 44,
             borderRadius: radii.md,
-            backgroundColor: `${tint}22`,
+            backgroundColor: `${def.color}22`,
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-          <Ionicons name={categoryIcon(expense.category)} size={20} color={tint} />
+          <CategoryIcon icon={def.icon} color={def.color} size={23} />
         </View>
       )}
 
@@ -71,14 +56,16 @@ export function ExpenseRow({
           {expense.merchant}
         </Txt>
         <Txt variant="small" color={theme.textMuted} numberOfLines={1}>
-          {subtitle ?? `${formatDateID(expense.date)} Â· ${expense.category}`}
+          {subtitle ?? `${formatDateID(expense.date)} · ${expense.category}`}
         </Txt>
       </View>
 
-      <Txt variant="body" style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}>
+      <Txt
+        variant="body"
+        style={{ fontWeight: '700', fontVariant: ['tabular-nums'] }}
+        numberOfLines={1}>
         -{formatRupiah(expense.amount)}
       </Txt>
     </PressableScale>
   );
 }
-

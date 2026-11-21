@@ -1,6 +1,6 @@
 import type { Expense, ExpenseItem, Wallet } from '@/db/queries';
 import { formatDateID } from '@/lib/dates';
-import { formatRupiah } from '@/lib/money';
+import { formatRupiahExact } from '@/lib/money';
 
 export type ReceiptData = {
   wallet: Wallet;
@@ -18,14 +18,14 @@ function esc(value: string | null | undefined): string {
 
 function itemRows(items: ExpenseItem[], expense: Expense): string {
   if (items.length === 0) {
-    return `<div class="row"><span>${esc(expense.merchant)}</span><span>${esc(formatRupiah(expense.amount))}</span></div>`;
+    return `<div class="row"><span>${esc(expense.merchant)}</span><span>${esc(formatRupiahExact(expense.amount))}</span></div>`;
   }
   return items
     .map((item) => {
       const lineTotal = Math.round(item.price * (item.qty || 1));
       return `<div class="item">
         <div class="iname">${esc(item.name)}</div>
-        <div class="row small"><span>${item.qty && item.qty !== 1 ? `${item.qty} x ${formatRupiah(item.price)}` : ''}</span><span>${esc(formatRupiah(lineTotal))}</span></div>
+        <div class="row small"><span>${item.qty && item.qty !== 1 ? `${item.qty} x ${formatRupiahExact(item.price)}` : ''}</span><span>${esc(formatRupiahExact(lineTotal))}</span></div>
       </div>`;
     })
     .join('');
@@ -55,11 +55,11 @@ export function buildReceiptHtml(receipts: ReceiptData[], width: ReceiptWidth = 
         <div class="rule"></div>
         ${
           hasItems
-            ? `<div class="row"><span>Subtotal</span><span>${esc(formatRupiah(subtotal))}</span></div>`
+            ? `<div class="row"><span>Subtotal</span><span>${esc(formatRupiahExact(subtotal))}</span></div>`
             : ''
         }
-        ${expense.tax > 0 ? `<div class="row"><span>Pajak</span><span>${esc(formatRupiah(expense.tax))}</span></div>` : ''}
-        <div class="row total"><span>TOTAL</span><span>${esc(formatRupiah(expense.amount))}</span></div>
+        ${expense.tax > 0 ? `<div class="row"><span>Pajak</span><span>${esc(formatRupiahExact(expense.tax))}</span></div>` : ''}
+        <div class="row total"><span>TOTAL</span><span>${esc(formatRupiahExact(expense.amount))}</span></div>
         <div class="rule"></div>
         <div class="row small muted"><span>${esc(wallet.name)}</span><span>${esc(expense.category)}</span></div>
         ${expense.note ? `<div class="note">${esc(expense.note)}</div>` : ''}
@@ -128,3 +128,4 @@ export function buildReceiptCsv(receipts: ReceiptData[]): string {
   lines.push(['', '', '', '', '', '', '', total, ''].join(';'));
   return `\ufeff${lines.join('\r\n')}`;
 }
+

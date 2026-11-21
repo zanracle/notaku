@@ -4,15 +4,22 @@ import { useCallback, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { ExpenseRow } from '@/components/expense-row';
+import { Onboarding } from '@/components/onboarding';
 import { WalletFormSheet } from '@/components/wallet-picker';
 import {
+  createExpense,
   dailyTotals,
   ensureDefaultWallet,
+  listBudgets,
   listExpenses,
+  listTemplates,
   listWallets,
   monthRange,
   totals,
+  totalsByCategory,
+  type Budget,
   type Expense,
+  type Template,
   type Wallet,
 } from '@/db/queries';
 import { addDays, currentMonthKey, formatDayMonth, monthLabel, todayISO } from '@/lib/dates';
@@ -29,10 +36,12 @@ import {
   Txt,
 } from '@/ui/components';
 
+import { CategoryIcon } from '@/ui/category-icon';
+
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { settings } = useApp();
+  const { settings, set, categoryDefs } = useApp();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [walletTotals, setWalletTotals] = useState<Record<string, { total: number; count: number }>>({});
   const [month, setMonth] = useState({ total: 0, count: 0 });
@@ -40,6 +49,10 @@ export default function HomeScreen() {
   const [recent, setRecent] = useState<Expense[]>([]);
   const [pendingBackup, setPendingBackup] = useState(false);
   const [walletSheet, setWalletSheet] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [spent, setSpent] = useState<Record<string, number>>({});
+  const [onboarding, setOnboarding] = useState(false);
 
   const load = useCallback(async () => {
     let list = await listWallets();
@@ -50,10 +63,13 @@ export default function HomeScreen() {
     setWallets(list);
 
     const range = monthRange();
-    const [monthTotals, dailyRows, latest] = await Promise.all([
+    const [monthTotals, dailyRows, latest, templateRows, budgetRows, catRows] = await Promise.all([
       totals(range),
       dailyTotals(addDays(todayISO(), -6), todayISO()),
       listExpenses({ limit: 4 }),
+      listTemplates(),
+      listBudgets(),
+      totalsByCategory(range),
     ]);
 
     const perWallet: Record<string, { total: number; count: number }> = {};
@@ -67,10 +83,28 @@ export default function HomeScreen() {
     setMonth({ total: monthTotals.total, count: monthTotals.count });
     setDaily(dailyRows);
     setRecent(latest);
+    setTemplates(templateRows);
+    setBudgets(budgetRows);
+    setSpent(Object.fromEntries(catRows.map((row) => [row.category, row.total])));
 
     const lastBackup = settings.last_backup_at ? new Date(settings.last_backup_at).getTime() : 0;
     setPendingBackup(monthTotals.count > 0 && Date.now() - lastBackup > 7 * 86_400_000);
-  }, [settings.last_backup_at]);
+    setOnboarding(settings.onboarding_done !== '1');
+  }, [settings.last_backup_at, settings.onboarding_done]);
+
+  const quickAdd = async (template: Template) => {
+    const target = wallets.find((wallet) => wallet.id === template.walletId) ?? wallets[0];
+    if (!target) return;
+    await createExpense({
+      walletId: target.id,
+      merchant: template.name,
+      date: todayISO(),
+      amount: template.amount,
+      category: template.category,
+      source: 'manual',
+    });
+    await load();
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -239,7 +273,7 @@ export default function HomeScreen() {
       <View style={{ gap: space.sm }}>
         <SectionTitle
           right={
-            <PressableScale onPress={() => router.push('/settings/wallets')} haptic="selection">
+            <PressableScale onPress={() => router.push('/pengaturan/wallets')} haptic="selection">
               <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
                 Kelola
               </Txt>
@@ -300,6 +334,97 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
+      {templates.length > 0 ? (
+        <View style={{ gap: space.sm }}>
+          <SectionTitle
+            right={
+              <PressableScale onPress={() => router.push('/pengaturan/templates')} haptic="selection">
+                <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+                  Atur
+                </Txt>
+              </PressableScale>
+            }>
+            Cepat
+          </SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+            {templates.slice(0, 8).map((template) => {
+              const def = categoryDefs.find((item) => item.name === template.category);
+              return (
+                <PressableScale
+                  key={template.id}
+                  onPress={() => quickAdd(template)}
+                  haptic="light"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: theme.card,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    borderRadius: radii.pill,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                  }}>
+                  <CategoryIcon icon={def?.icon ?? 'tag'} color={def?.color ?? theme.primary} size={20} />
+                  <View>
+                    <Txt variant="small" style={{ fontWeight: '700' }}>
+                      {template.name}
+                    </Txt>
+                    <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
+                      {formatRupiah(template.amount)}
+                    </Txt>
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {budgets.length > 0 ? (
+        <View style={{ gap: space.sm }}>
+          <SectionTitle
+            right={
+              <PressableScale onPress={() => router.push('/pengaturan/budgets')} haptic="selection">
+                <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
+                  Atur
+                </Txt>
+              </PressableScale>
+            }>
+            Anggaran bulan ini
+          </SectionTitle>
+          <Card style={{ gap: space.md }}>
+            {budgets.slice(0, 3).map((budget) => {
+              const used = spent[budget.category] ?? 0;
+              const ratio = budget.amount > 0 ? used / budget.amount : 0;
+              const barColor = ratio > 1 ? theme.danger : ratio > 0.8 ? theme.accent : theme.primary;
+              return (
+                <View key={budget.id} style={{ gap: 5 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Txt variant="small" style={{ fontWeight: '600' }}>
+                      {budget.category}
+                    </Txt>
+                    <Txt variant="small" color={ratio > 1 ? theme.danger : theme.textMuted} style={{ fontSize: 11 }}>
+                      {formatRupiah(used)} / {formatRupiah(budget.amount)}
+                    </Txt>
+                  </View>
+                  <View style={{ height: 7, borderRadius: 4, backgroundColor: theme.cardAlt }}>
+                    <View
+                      style={{
+                        width: `${Math.min(100, Math.round(ratio * 100))}%`,
+                        height: 7,
+                        borderRadius: 4,
+                        backgroundColor: barColor,
+                      }}
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </Card>
+        </View>
+      ) : null}
+
       <View style={{ gap: space.sm }}>
         <SectionTitle
           right={
@@ -344,6 +469,17 @@ export default function HomeScreen() {
         visible={walletSheet}
         onClose={() => setWalletSheet(false)}
         onSaved={() => {
+          load().catch(() => undefined);
+        }}
+      />
+
+      <Onboarding
+        visible={onboarding}
+        onDone={async () => {
+          setOnboarding(false);
+          await set('onboarding_done', '1');
+        }}
+        onReload={() => {
           load().catch(() => undefined);
         }}
       />

@@ -26,6 +26,9 @@ export default function RootLayout() {
           <Stack.Screen name="review" />
           <Stack.Screen name="wallet/[id]" />
           <Stack.Screen name="backup" />
+          <Stack.Screen name="gallery" />
+          <Stack.Screen name="pengaturan/budgets" />
+          <Stack.Screen name="pengaturan/templates" />
           <Stack.Screen name="pengaturan/profile" />
           <Stack.Screen name="pengaturan/ai" />
           <Stack.Screen name="pengaturan/wallets" />
@@ -35,3 +38,4 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+

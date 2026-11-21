@@ -26,6 +26,11 @@ Data di HP (SQLite), tanpa akun, tanpa cloud. Pembacaan struk memakai OCR di per
 | CSV untuk Excel | selesai |
 | Backup/restore ZIP, sampah, hapus lembut | selesai |
 | Kategori custom, kunci aplikasi, mode gelap | selesai |
+| Laporan: tren 6 bulan, donut kategori, heatmap kalender, top merchant, insight | selesai |
+| Anggaran per kategori + progres | selesai |
+| Template cepat, autocomplete merchant, ingat kategori | selesai |
+| Galeri struk, foto beruntun, kartu ringkasan bagikan | selesai |
+| PDF bulanan, filter lanjutan, sembunyikan nominal | selesai |
 | Deteksi duplikat, sapu file yatim, migrasi DB | selesai |
 | Tes: parser 13 fixture, uang, tanggal, migrasi SQL | 23 tes lulus |
 

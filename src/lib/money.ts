@@ -2,6 +2,13 @@
 
 const MAX_AMOUNT = 50_000_000;
 
+/** Saat privasi aktif, seluruh tampilan UI memakai masker. Ekspor memakai versi Exact. */
+let masked = false;
+
+export function setMoneyMasked(value: boolean): void {
+  masked = value;
+}
+
 export function onlyDigits(input: string): string {
   return input.replace(/\D+/g, '');
 }
@@ -62,14 +69,21 @@ export function groupDigits(value: number | string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
-/** 1234500 -> "Rp 1.234.500" */
+/** 1234500 -> "Rp 1.234.500" (mengikuti mode privasi) */
 export function formatRupiah(value: number | null | undefined): string {
+  if (masked) return 'Rp ••••';
+  return formatRupiahExact(value);
+}
+
+/** Selalu menampilkan angka. Dipakai ekspor, PDF, struk, dan kartu bagikan. */
+export function formatRupiahExact(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return 'Rp 0';
   const sign = value < 0 ? '-' : '';
   return `${sign}Rp ${groupDigits(Math.abs(value))}`;
 }
 
 export function formatRupiahCompact(value: number): string {
+  if (masked) return 'Rp ••';
   if (Math.abs(value) >= 1_000_000) {
     const juta = value / 1_000_000;
     return `Rp ${juta.toFixed(juta >= 10 ? 0 : 1).replace('.', ',')} jt`;
@@ -77,5 +91,5 @@ export function formatRupiahCompact(value: number): string {
   if (Math.abs(value) >= 10_000) {
     return `Rp ${Math.round(value / 1000)} rb`;
   }
-  return formatRupiah(value);
+  return formatRupiahExact(value);
 }

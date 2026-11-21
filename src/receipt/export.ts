@@ -59,6 +59,22 @@ export async function shareReceiptCsv(receipts: ReceiptData[], walletName: strin
   return target.uri;
 }
 
+export async function captureViewImage(ref: RefObject<unknown>, fileName: string): Promise<string> {
+  if (!ref.current) throw new Error('Konten belum siap.');
+  let captureRef: ((target: unknown, options: Record<string, unknown>) => Promise<string>) | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    captureRef = require('react-native-view-shot').captureRef;
+  } catch {
+    captureRef = null;
+  }
+  if (!captureRef) throw new Error('Simpan gambar butuh aplikasi versi build. Pakai PDF untuk sekarang.');
+  const tmp = await captureRef(ref, { format: 'jpg', quality: 0.95, result: 'tmpfile', width: 1080 });
+  const target = await copyInto(tmp, fileName);
+  await shareFile(target, 'image/jpeg', 'Bagikan gambar');
+  return target;
+}
+
 export async function captureReceiptImage(
   ref: RefObject<unknown>,
   receipts: ReceiptData[],
@@ -88,3 +104,4 @@ export async function captureReceiptImage(
   await shareFile(target, 'image/jpeg', 'Kirim struk sebagai gambar');
   return target;
 }
+

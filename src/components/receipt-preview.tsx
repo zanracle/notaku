@@ -1,7 +1,7 @@
 import { Platform, StyleSheet, View } from 'react-native';
 
 import { formatDateID } from '@/lib/dates';
-import { formatRupiah } from '@/lib/money';
+import { formatRupiahExact } from '@/lib/money';
 import type { ReceiptData } from '@/receipt/build';
 import { space } from '@/theme';
 import { Txt } from '@/ui/components';
@@ -31,25 +31,25 @@ export function ReceiptPreview({ receipts }: { receipts: ReceiptData[] }) {
             <View style={styles.rule} />
 
             {items.length === 0 ? (
-              <Row label={expense.merchant} value={formatRupiah(expense.amount)} />
+              <Row label={expense.merchant} value={formatRupiahExact(expense.amount)} />
             ) : (
               items.map((item) => (
                 <View key={item.id} style={{ marginBottom: 4 }}>
                   <Txt style={[styles.text, { fontWeight: '600' }]}>{item.name}</Txt>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Txt style={[styles.small, styles.muted]}>
-                      {item.qty && item.qty !== 1 ? `${item.qty} x ${formatRupiah(item.price)}` : ''}
+                      {item.qty && item.qty !== 1 ? `${item.qty} x ${formatRupiahExact(item.price)}` : ''}
                     </Txt>
-                    <Txt style={styles.small}>{formatRupiah(item.price * (item.qty || 1))}</Txt>
+                    <Txt style={styles.small}>{formatRupiahExact(item.price * (item.qty || 1))}</Txt>
                   </View>
                 </View>
               ))
             )}
 
             <View style={styles.rule} />
-            {items.length > 0 ? <Row label="Subtotal" value={formatRupiah(subtotal)} /> : null}
-            {expense.tax > 0 ? <Row label="Pajak" value={formatRupiah(expense.tax)} /> : null}
-            <Row label="TOTAL" value={formatRupiah(expense.amount)} bold />
+            {items.length > 0 ? <Row label="Subtotal" value={formatRupiahExact(subtotal)} /> : null}
+            {expense.tax > 0 ? <Row label="Pajak" value={formatRupiahExact(expense.tax)} /> : null}
+            <Row label="TOTAL" value={formatRupiahExact(expense.amount)} bold />
             <View style={styles.rule} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Txt style={[styles.small, styles.muted]}>{wallet.name}</Txt>
@@ -86,3 +86,4 @@ const styles = StyleSheet.create({
     marginVertical: 5,
   },
 });
+

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Semua migrasi berurutan. Tambah entri baru di akhir; jangan ubah entri lama,
@@ -123,5 +123,27 @@ export const MIGRATIONS: string[][] = [
       sort_order INTEGER NOT NULL DEFAULT 0
     );`,
     `CREATE INDEX IF NOT EXISTS idx_items_expense ON expense_items(expense_id);`,
+  ],
+  [
+    `CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY NOT NULL,
+      wallet_id TEXT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE (wallet_id, category)
+    );`,
+    `CREATE TABLE IF NOT EXISTS templates (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      wallet_id TEXT NOT NULL REFERENCES wallets(id),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_budgets_wallet ON budgets(wallet_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_templates_wallet ON templates(wallet_id);`,
   ],
 ];

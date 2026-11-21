@@ -76,3 +76,27 @@ describe('migrasi v1 ke v2', () => {
     ).toThrow();
   });
 });
+describe('migrasi v3', () => {
+  it('membuat anggaran unik per dompet+kategori dan template', () => {
+    const db = freshDb();
+    for (const statement of MIGRATIONS[1]) db.exec(statement);
+    for (const statement of MIGRATIONS[2]) db.exec(statement);
+
+    db.prepare(
+      "INSERT INTO wallets (id, name, color, created_at, updated_at) VALUES ('w1', 'Harian', '#0E7C5F', 'now', 'now')",
+    ).run();
+
+    const insertBudget = db.prepare(
+      "INSERT INTO budgets (id, wallet_id, category, amount, created_at, updated_at) VALUES (?, 'w1', 'Makan', ?, 'now', 'now')",
+    );
+    insertBudget.run('b1', 1500000);
+    expect(() => insertBudget.run('b2', 2000000)).toThrow();
+
+    db.prepare(
+      "INSERT INTO templates (id, name, amount, category, wallet_id, sort_order, created_at) VALUES ('t1', 'Kopi', 25000, 'Makan', 'w1', 0, 'now')",
+    ).run();
+    const rows = db.prepare('SELECT * FROM templates').all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].amount).toBe(25000);
+  });
+});

@@ -103,6 +103,33 @@ export default function SettingsScreen() {
         />
         <Divider inset={56} />
         <ListRow
+          icon="pie-chart"
+          iconColor={theme.warning}
+          iconBg={theme.accentSoft}
+          title="Anggaran"
+          subtitle="Batas per kategori tiap bulan"
+          onPress={() => router.push('/pengaturan/budgets')}
+        />
+        <Divider inset={56} />
+        <ListRow
+          icon="flash"
+          iconColor={theme.primary}
+          iconBg={theme.mint}
+          title="Template cepat"
+          subtitle="Kopi, parkir, tol — sekali tap"
+          onPress={() => router.push('/pengaturan/templates')}
+        />
+        <Divider inset={56} />
+        <ListRow
+          icon="images"
+          iconColor={theme.warning}
+          iconBg={theme.accentSoft}
+          title="Galeri struk"
+          subtitle="Semua foto dalam satu tempat"
+          onPress={() => router.push('/gallery')}
+        />
+        <Divider inset={56} />
+        <ListRow
           icon="cloud-upload"
           iconColor={theme.primary}
           iconBg={theme.mint}
@@ -154,8 +181,36 @@ export default function SettingsScreen() {
             </Txt>
           </View>
           <Switch
-            value={settings.app_lock === '1'}
-            onValueChange={(next) => set('app_lock', next ? '1' : '0')}
+            value={settings.hide_amounts === '1'}
+            onValueChange={(next) => set('hide_amounts', next ? '1' : '0')}
+            trackColor={{ true: theme.primary, false: theme.cardAlt }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+        <Divider />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              backgroundColor: theme.cardAlt,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Ionicons name="eye-off" size={18} color={theme.textMuted} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Txt variant="body" style={{ fontWeight: '600' }}>
+              Sembunyikan nominal
+            </Txt>
+            <Txt variant="small" color={theme.textMuted}>
+              Angka di layar disamarkan, ekspor tetap utuh
+            </Txt>
+          </View>
+          <Switch
+            value={settings.hide_amounts === '1'}
+            onValueChange={(next) => set('hide_amounts', next ? '1' : '0')}
             trackColor={{ true: theme.primary, false: theme.cardAlt }}
             thumbColor="#FFFFFF"
           />

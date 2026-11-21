@@ -6,7 +6,8 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { getDb } from '@/db';
 import { getSettings, setSetting } from '@/db/queries';
-import { readCategories } from '@/lib/defaults';
+import { readCategories, readCategoryDefs, type CategoryDef } from '@/lib/defaults';
+import { setMoneyMasked } from '@/lib/money';
 import { sweepOrphanFiles } from '@/storage/images';
 import { space, useTheme } from '@/theme';
 import { AppButton, Txt } from '@/ui/components';
@@ -16,6 +17,7 @@ type AppState = {
   fatal: string | null;
   settings: Record<string, string>;
   categories: string[];
+  categoryDefs: CategoryDef[];
   set: (key: string, value: string) => Promise<void>;
   reload: () => Promise<void>;
 };
@@ -64,6 +66,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [load]);
 
+  const [, setMaskTick] = useState(0);
+
+  useEffect(() => {
+    setMoneyMasked(settings.hide_amounts === '1');
+    setMaskTick((tick) => tick + 1);
+  }, [settings.hide_amounts]);
+
   const set = useCallback(async (key: string, value: string) => {
     await setSetting(key, value);
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -75,6 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fatal,
       settings,
       categories: readCategories(settings.categories),
+      categoryDefs: readCategoryDefs(settings.categories),
       set,
       reload: async () => {
         const values = await load();
@@ -185,4 +195,6 @@ function LockScreen({ onUnlock }: { onUnlock: () => void }) {
     </View>
   );
 }
+
+
 

@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
-import * as Haptics from 'expo-haptics';
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
 
+import { clearCaptureQueue, enqueueCapture, shiftCapture } from '@/lib/capture-queue';
 import { radii, space, useTheme } from '@/theme';
 import { AppButton, Screen, ScreenHeader, Txt } from '@/ui/components';
 
@@ -16,33 +17,57 @@ export default function CaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [photos, setPhotos] = useState<string[]>([]);
 
-  const openReview = (uri: string) => {
-    router.replace({ pathname: '/review', params: { photoUri: uri } });
+  useEffect(() => {
+    clearCaptureQueue();
+  }, []);
+
+  const addPhoto = (uri: string) => {
+    enqueueCapture(uri);
+    setPhotos((prev) => [...prev, uri]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   };
 
   const takePicture = async () => {
     if (!cameraRef.current || busy) return;
     setBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (!photo?.uri) throw new Error('Foto kosong');
-      openReview(photo.uri);
+      addPhoto(photo.uri);
     } catch {
       Alert.alert('Gagal memotret', 'Coba lagi, atau pilih foto dari galeri.');
+    } finally {
       setBusy(false);
     }
   };
 
   const pickFromGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.9,
-    });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (result.canceled || !result.assets?.[0]) return;
-    Haptics.selectionAsync().catch(() => undefined);
-    openReview(result.assets[0].uri);
+    addPhoto(result.assets[0].uri);
+  };
+
+  const finish = () => {
+    if (photos.length === 0) {
+      router.back();
+      return;
+    }
+    const first = shiftCapture() ?? photos[0];
+    router.replace({ pathname: '/review', params: { photoUri: first, bulk: '1' } });
+  };
+
+  const close = () => {
+    if (photos.length === 0) {
+      router.back();
+      return;
+    }
+    Alert.alert('Buang foto?', `${photos.length} foto belum diproses.`, [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Buang', style: 'destructive', onPress: () => router.back() },
+    ]);
   };
 
   if (!permission) {
@@ -66,8 +91,8 @@ export default function CaptureScreen() {
             Butuh izin kamera
           </Txt>
           <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-            NotaKu memakai kamera hanya untuk memotret struk. Foto tidak dikirim ke mana pun kecuali
-            kamu menekan tombol AI.
+            NotaKu memakai kamera hanya untuk memotret struk. Foto tidak dikirim ke mana pun
+            kecuali kamu memakai fitur Gemini.
           </Txt>
           <AppButton title="Izinkan kamera" onPress={() => requestPermission()} />
           <AppButton title="Pilih dari galeri" variant="secondary" onPress={pickFromGallery} />
@@ -81,9 +106,9 @@ export default function CaptureScreen() {
       <CameraView ref={cameraRef} style={{ flex: 1 }} facing="back" enableTorch={torch} />
 
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: space.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={close}
             accessibilityLabel="Tutup kamera"
             hitSlop={12}
             style={{
@@ -97,6 +122,25 @@ export default function CaptureScreen() {
             <Ionicons name="close" size={22} color="#FFFFFF" />
           </Pressable>
           <View style={{ flex: 1 }} />
+          {photos.length > 0 ? (
+            <Pressable
+              onPress={finish}
+              accessibilityLabel="Selesai memotret"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: theme.accent,
+                paddingHorizontal: 14,
+                paddingVertical: 9,
+                borderRadius: 999,
+              }}>
+              <Txt variant="small" color={theme.primaryDeep} style={{ fontWeight: '700' }}>
+                Selesai ({photos.length})
+              </Txt>
+              <Ionicons name="arrow-forward" size={15} color={theme.primaryDeep} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setTorch((value) => !value)}
             accessibilityLabel={torch ? 'Matikan lampu' : 'Nyalakan lampu'}
@@ -114,7 +158,9 @@ export default function CaptureScreen() {
         </View>
       </View>
 
-      <View pointerEvents="none" style={{ ...StyleSheetAbsolute, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
         <View
           style={{
             width: '84%',
@@ -125,7 +171,9 @@ export default function CaptureScreen() {
           }}
         />
         <Txt variant="small" color="#FFFFFF" style={{ marginTop: 14, opacity: 0.9 }}>
-          Posisikan seluruh struk di dalam bingkai
+          {photos.length > 0
+            ? `${photos.length} struk siap. Lanjut foto berikutnya atau tekan Selesai.`
+            : 'Posisikan seluruh struk di dalam bingkai'}
         </Txt>
       </View>
 
@@ -137,10 +185,22 @@ export default function CaptureScreen() {
           right: 0,
           paddingBottom: 34,
           paddingTop: space.lg,
-          alignItems: 'center',
           gap: space.md,
           backgroundColor: 'rgba(0,0,0,0.35)',
         }}>
+        {photos.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: space.lg }}>
+            {photos.map((uri, index) => (
+              <View key={`${uri}-${index}`} style={{ width: 46, height: 60, borderRadius: 8, overflow: 'hidden' }}>
+                <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '70%' }}>
           <Pressable
             onPress={pickFromGallery}
@@ -172,11 +232,7 @@ export default function CaptureScreen() {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-            {busy ? (
-              <ActivityIndicator color="#111827" />
-            ) : (
-              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF' }} />
-            )}
+            {busy ? <ActivityIndicator color="#111827" /> : <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF' }} />}
           </Pressable>
 
           <View style={{ width: 46 }} />
@@ -185,13 +241,3 @@ export default function CaptureScreen() {
     </View>
   );
 }
-
-const StyleSheetAbsolute = {
-  position: 'absolute' as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-};
-
-
