@@ -2,6 +2,7 @@ import { Image , View } from 'react-native';
 
 import type { Expense } from '@/db/queries';
 import { categoryDef } from '@/lib/defaults';
+import { useApp } from '@/state/app';
 import { formatDateID } from '@/lib/dates';
 import { formatRupiah } from '@/lib/money';
 import { radii, space, useTheme } from '@/theme';
@@ -18,7 +19,8 @@ export function ExpenseRow({
   subtitle?: string;
 }) {
   const theme = useTheme();
-  const def = categoryDef(expense.category);
+  const { categoryDefs } = useApp();
+  const def = categoryDefs.find((item) => item.name === expense.category) ?? categoryDef(expense.category);
 
   return (
     <PressableScale
@@ -56,7 +58,7 @@ export function ExpenseRow({
           {expense.merchant}
         </Txt>
         <Txt variant="small" color={theme.textMuted} numberOfLines={1}>
-          {subtitle ?? `${formatDateID(expense.date)} · ${expense.category}`}
+          {subtitle ?? `${formatDateID(expense.date)} Â· ${expense.category}`}
         </Txt>
       </View>
 
@@ -69,3 +71,4 @@ export function ExpenseRow({
     </PressableScale>
   );
 }
+
