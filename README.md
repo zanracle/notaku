@@ -2,7 +2,7 @@
 
 Pencatat pengeluaran dari foto struk. Gratis, tanpa akun, tanpa iklan.
 
-**Unduh:** halaman Releases repo ini → `NotaKu-<versi>.apk`.
+**Unduh:** [Releases](https://github.com/zanracle/notaku/releases/latest) → `NotaKu-<versi>.apk`.
 APK ditandatangani dan bisa di-install langsung di Android 64-bit.
 
 Foto struk → OCR di HP membaca nama toko, tanggal, item satu per satu, dan total →
