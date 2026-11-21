@@ -90,7 +90,7 @@ export default function ReportScreen() {
       dailyTotals(range.from, range.to, walletId ?? undefined),
       topMerchants(range.from, range.to, 5),
       listBudgets(walletId ?? undefined),
-      listExpenses({ ...range, walletId: walletId ?? undefined, limit: 1 }),
+      listExpenses({ ...range, walletId: walletId ?? undefined }),
     ]);
     const monthSum = await totals({ ...range, walletId: walletId ?? undefined });
     setWallets(allWallets);
@@ -100,7 +100,7 @@ export default function ReportScreen() {
     setDaily(Object.fromEntries(dailyRows.map((row) => [row.date, row.total])));
     setMerchants(topRows);
     setBudgets(budgetRows);
-    setBiggest(biggestRows[0] ?? null);
+    setBiggest(biggestRows.reduce<Expense | null>((top, row) => (!top || row.amount > top.amount ? row : top), null));
   }, [month, walletId]);
 
   useFocusEffect(

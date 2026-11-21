@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -115,7 +115,7 @@ export function CategoryDonut({
         <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.cardAlt} strokeWidth={thickness} fill="none" />
         {total > 0
           ? arcs.map((arc) => (
-              <G key={arc.index} rotation={arc.rotation} origin={`${size / 2}, ${size / 2}`}>
+              <G key={arc.index} rotation={arc.rotation} originX={size / 2} originY={size / 2}>
                 <Circle
                   cx={size / 2}
                   cy={size / 2}
@@ -246,3 +246,4 @@ function formatCompact(value: number): string {
 }
 
 export const chartRadii = radii;
+
