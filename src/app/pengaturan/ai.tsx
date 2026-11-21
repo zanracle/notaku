@@ -148,7 +148,7 @@ export default function AiSettingsScreen() {
             Pemakaian bulan ini
           </Txt>
           <Txt variant="section">
-            {usage.calls} pembacaan{usage.failed > 0 ? ` Â· ${usage.failed} gagal` : ''}
+            {usage.calls} pembacaan{usage.failed > 0 ? ` · ${usage.failed} gagal` : ''}
           </Txt>
         </View>
         <Txt variant="small" color={theme.textMuted} style={{ fontSize: 11 }}>

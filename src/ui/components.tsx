@@ -125,7 +125,7 @@ export function Screen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const bottom = (edges.includes('bottom') ? insets.bottom : 0) + (withTabs ? 74 : 0);
+  const bottom = (edges.includes('bottom') ? insets.bottom : 0) + (withTabs ? 84 : 0);
   const content = (
     <View style={[padded && { paddingHorizontal: space.xl }, { gap: space.lg }]}>{children}</View>
   );
@@ -138,7 +138,7 @@ export function Screen({
           contentContainerStyle={{
             paddingTop: space.md,
             paddingBottom: footer ? space.xl : bottom + 28,
-            gap: space.lg,
+            gap: space.xl,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
@@ -689,7 +689,7 @@ export const UI = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  display: { fontSize: 30, fontWeight: '800', letterSpacing: -0.8 },
+  display: { fontSize: 28, fontWeight: '800', letterSpacing: -0.7 },
   title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4 },
   section: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   body: { fontSize: 14, fontWeight: '400' },
@@ -697,6 +697,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' },
   amount: { fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });
+
 
 
 

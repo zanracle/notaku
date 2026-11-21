@@ -58,7 +58,7 @@ export function ExpenseRow({
           {expense.merchant}
         </Txt>
         <Txt variant="small" color={theme.textMuted} numberOfLines={1}>
-          {subtitle ?? `${formatDateID(expense.date)} Â· ${expense.category}`}
+          {subtitle ?? `${formatDateID(expense.date)} · ${expense.category}`}
         </Txt>
       </View>
 

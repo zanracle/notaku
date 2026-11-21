@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
@@ -165,7 +166,7 @@ export default function ReportScreen() {
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-          <Txt style={{ fontSize: 18 }}>â–¦</Txt>
+            <Ionicons name="images-outline" size={20} color={theme.text} />
         </PressableScale>
       </View>
 
@@ -199,12 +200,12 @@ export default function ReportScreen() {
                 borderRadius: 999,
               }}>
               <Txt variant="small" color={delta > 0 ? '#F0A83C' : '#CDE7DE'} style={{ fontWeight: '700' }}>
-                {delta > 0 ? 'â†‘' : 'â†“'} {Math.abs(Math.round(delta * 100))}% vs bulan lalu
+              {delta > 0 ? '↑' : '↓'} {Math.abs(Math.round(delta * 100))}% vs bulan lalu
               </Txt>
             </View>
           ) : null}
           <Txt variant="small" color="#9DBDB2">
-            {summary.count} catatan Â· rata-rata {formatRupiah(dailyAverage)}/hari
+            {summary.count} catatan · rata-rata {formatRupiah(dailyAverage)}/hari
           </Txt>
         </View>
         {isCurrent ? (
@@ -226,31 +227,39 @@ export default function ReportScreen() {
       {cats.length > 0 ? (
         <Card style={{ gap: space.lg }}>
           <SectionTitle>Kategori</SectionTitle>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+          <View style={{ alignItems: 'center', gap: space.lg }}>
             <CategoryDonut
               segments={donutSegments}
               centerTop="total"
               centerBottom={formatRupiah(summary.total)}
             />
-            <View style={{ flex: 1, gap: space.sm }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: space.sm }}>
               {cats.slice(0, 4).map((row) => {
                 const def = categoryDefs.find((d) => d.name === row.category);
+                const percent = Math.round((row.total / Math.max(summary.total, 1)) * 100);
                 return (
                   <PressableScale
                     key={row.category}
                     onPress={() => openExpenses({ category: row.category, from: monthBounds(month).from, to: monthBounds(month).to })}
                     haptic="selection"
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                    style={{
+                      width: '50%',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: space.sm,
+                      paddingRight: space.sm,
+                      paddingVertical: 4,
+                    }}>
                     <CategoryIcon icon={def?.icon ?? 'tag'} color={def?.color ?? theme.textMuted} size={20} />
                     <View style={{ flex: 1 }}>
                       <Txt variant="small" style={{ fontWeight: '600' }} numberOfLines={1}>
                         {row.category}
                       </Txt>
                       <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
-                        {Math.round((row.total / Math.max(summary.total, 1)) * 100)}% Â· {row.count}x
+                        {percent}% · {row.count}x
                       </Txt>
                     </View>
-                    <Txt variant="small" color={theme.textMuted}>
+                    <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
                       {formatRupiah(row.total)}
                     </Txt>
                   </PressableScale>
@@ -347,20 +356,20 @@ export default function ReportScreen() {
         <SectionTitle>Insight</SectionTitle>
         {topCategory ? (
           <Txt variant="small" color={theme.textMuted}>
-            â€¢ {topCategory.category} menyerap {topShare}% pengeluaran bulan ini.
+            • {topCategory.category} menyerap {topShare}% pengeluaran bulan ini.
           </Txt>
         ) : null}
         <Txt variant="small" color={theme.textMuted}>
-          â€¢ {noSpendDays} hari tanpa pengeluaran dari {elapsedDays} hari.
+            • {noSpendDays} hari tanpa pengeluaran dari {elapsedDays} hari.
         </Txt>
         {biggest ? (
           <Txt variant="small" color={theme.textMuted}>
-            â€¢ Terbesar: {biggest.merchant} {formatRupiah(biggest.amount)}.
+            • Terbesar: {biggest.merchant} {formatRupiah(biggest.amount)}.
           </Txt>
         ) : null}
         {delta != null ? (
           <Txt variant="small" color={theme.textMuted}>
-            â€¢ Total {delta > 0 ? 'naik' : 'turun'} {Math.abs(Math.round(delta * 100))}% dibanding bulan lalu.
+            • Total {delta > 0 ? 'naik' : 'turun'} {Math.abs(Math.round(delta * 100))}% dibanding bulan lalu.
           </Txt>
         ) : null}
       </Card>
@@ -393,4 +402,5 @@ export default function ReportScreen() {
     </Screen>
   );
 }
+
 

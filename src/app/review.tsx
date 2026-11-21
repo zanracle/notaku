@@ -115,7 +115,7 @@ export default function ReviewScreen() {
     setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
     setConfidence(parsed.confidence);
     setSource('ocr');
-    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Ãƒâ€šÃ‚Â· ') : null);
+    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Â· ') : null);
   };
 
   const applyAi = (ai: AiReceipt) => {
@@ -131,7 +131,7 @@ export default function ReviewScreen() {
     if (ai.items.length > 0) {
       setItems(ai.items.map((item) => ({ key: newId('tmp'), name: item.name, qty: item.qty || 1, price: item.price })));
     }
-    setNotice(`Dibaca Gemini · keyakinan ${ai.confidence}%`);
+    setNotice(`Dibaca Gemini Â· keyakinan ${ai.confidence}%`);
   };
 
   const readWithAi = useCallback(
@@ -254,7 +254,7 @@ export default function ReviewScreen() {
     setPhotoUri(uri);
     setSaved(null);
     setDup(null);
-    setBulkNotice('Tersimpan. Lanjut ke struk berikutnya…');
+    setBulkNotice('Tersimpan. Lanjut ke struk berikutnyaâ€¦');
     readPhoto(uri).catch(() => undefined);
   };
 
@@ -462,7 +462,7 @@ export default function ReviewScreen() {
       }>
       <ScreenHeader
         title={existing ? 'Ubah struk' : 'Periksa struk'}
-        subtitle={aiBusy ? 'Gemini membaca…' : reading ? 'Membaca struk…' : 'Semua kolom bisa diedit'}
+        subtitle={aiBusy ? 'Gemini membacaâ€¦' : reading ? 'Membaca strukâ€¦' : 'Semua kolom bisa diedit'}
         onBack={() => router.back()}
       />
 
@@ -478,7 +478,7 @@ export default function ReviewScreen() {
           }}>
           <Ionicons name="albums-outline" size={16} color={theme.primary} />
           <Txt variant="small" color={theme.primary} style={{ flex: 1 }}>
-            {bulkNotice ?? `Mode beruntun · ${captureQueueLength()} foto tersisa`}
+            {bulkNotice ?? `Mode beruntun Â· ${captureQueueLength()} foto tersisa`}
           </Txt>
         </View>
       ) : null}
@@ -525,7 +525,7 @@ export default function ReviewScreen() {
           </Txt>
           {aiBusy ? (
             <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-              Menyalin item satu per satuÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
+              Menyalin item satu per satuâ€¦
             </Txt>
           ) : null}
         </View>
@@ -579,7 +579,7 @@ export default function ReviewScreen() {
                   {memory.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
-                  {memory.lastCategory} · {formatRupiah(memory.lastAmount)}
+                  {memory.lastCategory} Â· {formatRupiah(memory.lastAmount)}
                 </Txt>
               </PressableScale>
             ))}
@@ -673,7 +673,7 @@ export default function ReviewScreen() {
                       </PressableScale>
                     </View>
                     <View style={{ flex: 1 }} />
-                    <View style={{ width: 120 }}>
+                    <View style={{ width: 110 }}>
                       <MoneyInput
                         compact
                         value={item.price || null}
@@ -759,7 +759,7 @@ export default function ReviewScreen() {
               <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
               <Txt variant="title">Tersimpan</Txt>
               <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-                {merchant} Ãƒâ€šÃ‚Â· {formatRupiah(amount ?? 0)}
+                {merchant} Â· {formatRupiah(amount ?? 0)}
               </Txt>
             </View>
             <AppButton
@@ -797,7 +797,7 @@ export default function ReviewScreen() {
                   {dup.expense.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted}>
-                  {dup.expense.date} Ãƒâ€šÃ‚Â· {formatRupiah(dup.expense.amount)}
+                  {dup.expense.date} Â· {formatRupiah(dup.expense.amount)}
                 </Txt>
               </Card>
             ) : null}
@@ -816,6 +816,7 @@ export default function ReviewScreen() {
     </Screen>
   );
 }
+
 
 
 

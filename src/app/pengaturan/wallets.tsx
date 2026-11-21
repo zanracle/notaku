@@ -108,7 +108,7 @@ export default function WalletsScreen() {
                   <Txt variant="section">{wallet.name}</Txt>
                   <Txt variant="small" color={theme.textMuted}>
                     {stat.count} catatan
-                    {wallet.budget ? ` Â· saldo awal ${formatRupiah(wallet.budget)}` : ''}
+                    {wallet.budget ? ` · saldo awal ${formatRupiah(wallet.budget)}` : ''}
                   </Txt>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />

@@ -290,7 +290,7 @@ export default function HomeScreen() {
                 onPress={() => router.push({ pathname: '/wallet/[id]', params: { id: wallet.id } })}
                 haptic="light"
                 style={{
-                  width: 170,
+                  width: 160,
                   backgroundColor: theme.card,
                   borderWidth: 1,
                   borderColor: theme.border,
@@ -317,7 +317,7 @@ export default function HomeScreen() {
             onPress={() => setWalletSheet(true)}
             haptic="selection"
             style={{
-              width: 92,
+              width: 88,
               borderRadius: radii.xl,
               borderWidth: 1.5,
               borderStyle: 'dashed',
@@ -486,4 +486,5 @@ export default function HomeScreen() {
     </Screen>
   );
 }
+
 

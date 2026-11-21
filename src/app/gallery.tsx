@@ -94,7 +94,7 @@ export default function GalleryScreen() {
                 {preview?.merchant}
               </Txt>
               <Txt variant="small" color="#9DBDB2">
-                {preview ? `${formatDateID(preview.date)} Â· ${formatRupiah(preview.amount)}` : ''}
+                {preview ? `${formatDateID(preview.date)} · ${formatRupiah(preview.amount)}` : ''}
               </Txt>
             </View>
             <PressableScale

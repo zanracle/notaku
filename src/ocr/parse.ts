@@ -158,9 +158,9 @@ export function extractItems(lines: string[], amount: number | null): ParsedItem
     if (/^\s*\d{1,2}\s+[A-Za-z]{3,9}\.?\s+20\d{2}\s*$/.test(line)) continue;
     if (/\d{1,2}:\d{2}/.test(line)) continue;
 
-    const withQty = line.match(/^(.*?)\s+(\d{1,3})\s*[xXÃ—]\s*(\d[\d.,]*)$/);
+    const withQty = line.match(/^(.*?)\s+(\d{1,3})\s*[xX×]\s*(\d[\d.,]*)$/);
     if (withQty) {
-      const name = withQty[1].replace(/[-â€¢*:]+$/, '').trim();
+      const name = withQty[1].replace(/[-•*:]+$/, '').trim();
       const qty = Number(withQty[2]);
       const price = parseMoney(withQty[3]);
       if (name.length >= 2 && price && qty > 0 && qty <= 99) {
@@ -172,7 +172,7 @@ export function extractItems(lines: string[], amount: number | null): ParsedItem
     const plain = line.match(/^(.*?)(\d[\d.,]*)$/);
     if (!plain) continue;
     if (/^20[2-3]\d$/.test(plain[2]) && !/[.,]/.test(plain[2])) continue;
-    const name = plain[1].replace(/[-â€¢*:.\s]+$/, '').trim();
+    const name = plain[1].replace(/[-•*:.\s]+$/, '').trim();
     const price = parseMoney(plain[2]);
     if (!name || name.length < 2) continue;
     if (name.replace(/[^A-Za-z]/g, '').length < 2) continue;
