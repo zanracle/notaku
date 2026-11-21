@@ -64,3 +64,18 @@ lalu diimplementasikan. Palet dan radius mengikuti file desain itu.
 - Ukuran turun dari 167 MB (universal, v1.0) -> 51,8 MB -> target ~41 MB setelah ML Kit lokal dilepas.
 - Barcode scanner expo-camera dimatikan lewat arcodeScannerEnabled: false.
 - OCR lokal dihapus; pembacaan struk memakai Gemini. Tanpa kunci, isi manual.
+
+## v1.2 (2026-11-21)
+
+- Tab Laporan: tren 6 bulan, donut kategori, heatmap kalender, top merchant, insight, proyeksi, drill-down ke daftar terfilter.
+- Anggaran per kategori (tabel budgets) + progres di Beranda dan Laporan.
+- Template cepat (tabel templates) muncul di Beranda, sekali tap tersimpan.
+- Autocomplete merchant + ingat kategori dari riwayat.
+- Filter lanjutan: rentang tanggal, nominal min/max, dompet, kategori.
+- Sembunyikan nominal (masker UI; ekspor tetap angka asli).
+- Mode foto beruntun dengan antrean, galeri struk, kartu ringkasan bagikan, PDF bulanan.
+- Onboarding 3 layar + data contoh.
+- 8 ilustrasi kategori doodle duotone; kategori custom bisa pilih ikon dan warna.
+- Migrasi v3: budgets, templates. Tes migrasi ditambah.
+
+Build v1.2.0 lewat GitHub Actions, arm64, R8, di bawah 50 MB.
