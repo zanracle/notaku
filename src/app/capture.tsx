@@ -201,7 +201,7 @@ export default function CaptureScreen() {
           </ScrollView>
         ) : null}
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '70%' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '70%', alignSelf: 'center' }}>
           <Pressable
             onPress={pickFromGallery}
             accessibilityLabel="Pilih dari galeri"

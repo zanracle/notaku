@@ -400,10 +400,17 @@ export default function HomeScreen() {
               const barColor = ratio > 1 ? theme.danger : ratio > 0.8 ? theme.accent : theme.primary;
               return (
                 <View key={budget.id} style={{ gap: 5 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Txt variant="small" style={{ fontWeight: '600' }}>
-                      {budget.category}
-                    </Txt>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CategoryIcon
+                        icon={(categoryDefs.find((def) => def.name === budget.category) ?? { icon: 'tag', color: theme.textMuted }).icon}
+                        color={(categoryDefs.find((def) => def.name === budget.category) ?? { icon: 'tag', color: theme.textMuted }).color}
+                        size={16}
+                      />
+                      <Txt variant="small" style={{ fontWeight: '600' }}>
+                        {budget.category}
+                      </Txt>
+                    </View>
                     <Txt variant="small" color={ratio > 1 ? theme.danger : theme.textMuted} style={{ fontSize: 11 }}>
                       {formatRupiah(used)} / {formatRupiah(budget.amount)}
                     </Txt>

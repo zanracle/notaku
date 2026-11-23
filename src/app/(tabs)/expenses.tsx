@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, ScrollView, View } from 'react-native';
 
 import { ExpenseRow } from '@/components/expense-row';
+import { categoryDef } from '@/lib/defaults';
+import { CategoryIcon } from '@/ui/category-icon';
 import { listExpenses, listWallets, type Expense, type Wallet } from '@/db/queries';
 import { formatDateID, formatDayMonth, monthLabel, todayISO } from '@/lib/dates';
 import { formatRupiah } from '@/lib/money';
@@ -12,7 +14,6 @@ import { radii, space, useTheme } from '@/theme';
 import {
   AppButton,
   Card,
-  Chip,
   DateField,
   EmptyState,
   Field,
@@ -38,7 +39,7 @@ export default function ExpensesScreen() {
   const theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ category?: string; from?: string; to?: string; search?: string }>();
-  const { categories } = useApp();
+  const { categories, categoryDefs } = useApp();
   const [month, setMonth] = useState(todayISO().slice(0, 7));
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export default function ExpensesScreen() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [picker, setPicker] = useState<'wallet' | 'category' | null>(null);
   const [draft, setDraft] = useState<{ from: string; to: string; min: number | null; max: number | null }>({
     from: '',
     to: '',
@@ -240,25 +242,66 @@ export default function ExpensesScreen() {
         </PressableScale>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-        <Chip label="Semua dompet" selected={!walletId} onPress={() => setWalletId(null)} />
-        {wallets.map((wallet) => (
-          <Chip
-            key={wallet.id}
-            label={wallet.name}
-            selected={walletId === wallet.id}
-            color={wallet.color}
-            onPress={() => setWalletId(wallet.id)}
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <PressableScale
+          onPress={() => setPicker('wallet')}
+          haptic="selection"
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: radii.md,
+            paddingHorizontal: space.md,
+            minHeight: 46,
+          }}>
+          <View
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: wallets.find((wallet) => wallet.id === walletId)?.color ?? theme.textMuted,
+            }}
           />
-        ))}
-      </ScrollView>
+          <Txt variant="small" style={{ flex: 1, fontWeight: '600' }} numberOfLines={1}>
+            {wallets.find((wallet) => wallet.id === walletId)?.name ?? 'Semua dompet'}
+          </Txt>
+          <Ionicons name="chevron-down" size={14} color={theme.textMuted} />
+        </PressableScale>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-        <Chip label="Semua" selected={!category} onPress={() => setCategory(null)} />
-        {categories.map((item) => (
-          <Chip key={item} label={item} selected={category === item} onPress={() => setCategory(item)} />
-        ))}
-      </ScrollView>
+        <PressableScale
+          onPress={() => setPicker('category')}
+          haptic="selection"
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: radii.md,
+            paddingHorizontal: space.md,
+            minHeight: 46,
+          }}>
+          {category ? (
+            <CategoryIcon
+              icon={(categoryDefs.find((def) => def.name === category) ?? categoryDef(category)).icon}
+              color={(categoryDefs.find((def) => def.name === category) ?? categoryDef(category)).color}
+              size={18}
+            />
+          ) : (
+            <Ionicons name="pricetags-outline" size={16} color={theme.textMuted} />
+          )}
+          <Txt variant="small" style={{ flex: 1, fontWeight: '600' }} numberOfLines={1}>
+            {category ?? 'Semua kategori'}
+          </Txt>
+          <Ionicons name="chevron-down" size={14} color={theme.textMuted} />
+        </PressableScale>
+      </View>
 
       {activeFilters > 0 || category || walletId || search ? (
         <PressableScale onPress={resetAll} haptic="selection" style={{ alignSelf: 'flex-start' }}>
@@ -306,6 +349,81 @@ export default function ExpensesScreen() {
           );
         })
       )}
+
+      <Modal visible={picker !== null} transparent animationType="slide" onRequestClose={() => setPicker(null)}>
+        <PressableScale style={{ flex: 1, backgroundColor: theme.overlay }} onPress={() => setPicker(null)} />
+        <View
+          style={{
+            backgroundColor: theme.bg,
+            borderTopLeftRadius: radii.xxl,
+            borderTopRightRadius: radii.xxl,
+            padding: space.xl,
+            paddingBottom: space.xxxl,
+            gap: space.sm,
+            maxHeight: '70%',
+          }}>
+          <Txt variant="title">{picker === 'wallet' ? 'Pilih dompet' : 'Pilih kategori'}</Txt>
+          <ScrollView contentContainerStyle={{ gap: 2 }}>
+            <PressableScale
+              onPress={() => {
+                if (picker === 'wallet') setWalletId(null);
+                else setCategory(null);
+                setPicker(null);
+              }}
+              haptic="selection"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
+              <Ionicons
+                name={picker === 'wallet' ? 'wallet-outline' : 'pricetags-outline'}
+                size={20}
+                color={theme.textMuted}
+              />
+              <Txt variant="body" style={{ flex: 1, fontWeight: '600' }}>
+                {picker === 'wallet' ? 'Semua dompet' : 'Semua kategori'}
+              </Txt>
+              {(picker === 'wallet' ? walletId === null : category === null) ? (
+                <Ionicons name="checkmark" size={18} color={theme.primary} />
+              ) : null}
+            </PressableScale>
+
+            {picker === 'wallet'
+              ? wallets.map((wallet) => (
+                  <PressableScale
+                    key={wallet.id}
+                    onPress={() => {
+                      setWalletId(wallet.id);
+                      setPicker(null);
+                    }}
+                    haptic="selection"
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
+                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: wallet.color }} />
+                    <Txt variant="body" style={{ flex: 1, fontWeight: walletId === wallet.id ? '700' : '400' }}>
+                      {wallet.name}
+                    </Txt>
+                    {walletId === wallet.id ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
+                  </PressableScale>
+                ))
+              : categories.map((item) => {
+                  const def = categoryDefs.find((d) => d.name === item) ?? categoryDef(item);
+                  return (
+                    <PressableScale
+                      key={item}
+                      onPress={() => {
+                        setCategory(item);
+                        setPicker(null);
+                      }}
+                      haptic="selection"
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
+                      <CategoryIcon icon={def.icon} color={def.color} size={22} />
+                      <Txt variant="body" style={{ flex: 1, fontWeight: category === item ? '700' : '400' }}>
+                        {item}
+                      </Txt>
+                      {category === item ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
+                    </PressableScale>
+                  );
+                })}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Modal visible={filterOpen} transparent animationType="slide" onRequestClose={() => setFilterOpen(false)}>
         <PressableScale style={{ flex: 1, backgroundColor: theme.overlay }} onPress={() => setFilterOpen(false)} />

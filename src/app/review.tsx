@@ -3,7 +3,7 @@ import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Modal, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, ScrollView, TextInput, View } from 'react-native';
 
 import { askGemini, aiErrorMessage, getApiKey, type AiReceipt } from '@/ai/gemini';
 import { ReceiptSheet } from '@/components/receipt-sheet';
@@ -27,10 +27,10 @@ import {
   type MerchantMemory,
   type Wallet,
 } from '@/db/queries';
-import { captureQueueLength, shiftCapture } from '@/lib/capture-queue';
+import { shiftCapture } from '@/lib/capture-queue';
 import { isValidISODate, todayISO } from '@/lib/dates';
 import { newId } from '@/lib/id';
-import { MAX_AMOUNT } from '@/lib/defaults';
+import { MAX_AMOUNT, categoryDef } from '@/lib/defaults';
 import { formatRupiah, isReasonableAmount } from '@/lib/money';
 import { ocrUnavailableMessage, recognizeText } from '@/ocr/recognize';
 import { parseReceipt, type ParsedReceipt } from '@/ocr/parse';
@@ -38,6 +38,7 @@ import { saveReceiptPhoto } from '@/storage/images';
 import type { ReceiptData } from '@/receipt/build';
 import { useApp } from '@/state/app';
 import { radii, space, useTheme } from '@/theme';
+import { CategoryIcon } from '@/ui/category-icon';
 import {
   AppButton,
   Badge,
@@ -63,7 +64,7 @@ export default function ReviewScreen() {
   const theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ photoUri?: string; expenseId?: string; walletId?: string; bulk?: string }>();
-  const { settings, categories, set } = useApp();
+  const { settings, categories, set, categoryDefs } = useApp();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [walletId, setWalletId] = useState<string | null>(params.walletId ?? null);
@@ -73,6 +74,8 @@ export default function ReviewScreen() {
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState<number | null>(null);
   const [tax, setTax] = useState<number | null>(null);
+  const [taxRate, setTaxRate] = useState<0 | 10 | 12>(0);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [category, setCategory] = useState(settings.default_category || 'Lain-lain');
   const [note, setNote] = useState('');
   const [items, setItems] = useState<DraftItem[]>([]);
@@ -91,7 +94,6 @@ export default function ReviewScreen() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptItems, setReceiptItems] = useState<ExpenseItem[]>([]);
   const [suggestions, setSuggestions] = useState<MerchantMemory[]>([]);
-  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
 
   const bulk = params.bulk === '1';
 
@@ -115,7 +117,7 @@ export default function ReviewScreen() {
     setCategory((prev) => (prev === 'Lain-lain' ? parsed.category : prev));
     setConfidence(parsed.confidence);
     setSource('ocr');
-    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' Â· ') : null);
+    setNotice(parsed.reasons.length > 0 ? parsed.reasons.join(' · ') : null);
   };
 
   const applyAi = (ai: AiReceipt) => {
@@ -131,7 +133,7 @@ export default function ReviewScreen() {
     if (ai.items.length > 0) {
       setItems(ai.items.map((item) => ({ key: newId('tmp'), name: item.name, qty: item.qty || 1, price: item.price })));
     }
-    setNotice(`Dibaca Gemini Â· keyakinan ${ai.confidence}%`);
+    setNotice(`Dibaca Gemini · keyakinan ${ai.confidence}%`);
   };
 
   const readWithAi = useCallback(
@@ -254,7 +256,6 @@ export default function ReviewScreen() {
     setPhotoUri(uri);
     setSaved(null);
     setDup(null);
-    setBulkNotice('Tersimpan. Lanjut ke struk berikutnyaâ€¦');
     readPhoto(uri).catch(() => undefined);
   };
 
@@ -307,12 +308,21 @@ export default function ReviewScreen() {
     await readPhoto(result.assets[0].uri);
   };
 
+  const applyTaxRate = (rate: 0 | 10 | 12) => {
+    setTaxRate(rate);
+    const value = rate === 0 ? 0 : Math.round((subtotal * rate) / 100);
+    setTax(value || null);
+    if (!amountTouched.current && subtotal > 0) setAmount(subtotal + value);
+  };
+
   const updateItem = (key: string, patch: Partial<DraftItem>) => {
     setItems((prev) => {
       const next = prev.map((item) => (item.key === key ? { ...item, ...patch } : item));
       if (!amountTouched.current) {
         const sum = next.reduce((total, item) => total + (item.price || 0) * (item.qty || 1), 0);
-        setAmount(sum > 0 ? sum + (tax ?? 0) : null);
+        const nextTax = taxRate > 0 ? Math.round((sum * taxRate) / 100) : (tax ?? 0);
+        if (taxRate > 0) setTax(nextTax);
+        setAmount(sum > 0 ? sum + nextTax : null);
       }
       return next;
     });
@@ -327,7 +337,9 @@ export default function ReviewScreen() {
       const next = prev.filter((item) => item.key !== key);
       if (!amountTouched.current) {
         const sum = next.reduce((total, item) => total + (item.price || 0) * (item.qty || 1), 0);
-        setAmount(sum > 0 ? sum + (tax ?? 0) : null);
+        const nextTax = taxRate > 0 ? Math.round((sum * taxRate) / 100) : (tax ?? 0);
+        if (taxRate > 0) setTax(nextTax);
+        setAmount(sum > 0 ? sum + nextTax : null);
       }
       return next;
     });
@@ -462,26 +474,9 @@ export default function ReviewScreen() {
       }>
       <ScreenHeader
         title={existing ? 'Ubah struk' : 'Periksa struk'}
-        subtitle={aiBusy ? 'Gemini membacaâ€¦' : reading ? 'Membaca strukâ€¦' : 'Semua kolom bisa diedit'}
+        subtitle={aiBusy ? 'Gemini membaca…' : reading ? 'Membaca struk…' : 'Semua kolom bisa diedit'}
         onBack={() => router.back()}
       />
-
-      {bulk ? (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            backgroundColor: theme.mint,
-            borderRadius: radii.lg,
-            padding: space.md,
-          }}>
-          <Ionicons name="albums-outline" size={16} color={theme.primary} />
-          <Txt variant="small" color={theme.primary} style={{ flex: 1 }}>
-            {bulkNotice ?? `Mode beruntun Â· ${captureQueueLength()} foto tersisa`}
-          </Txt>
-        </View>
-      ) : null}
 
       <Card style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
         <PressableScale onPress={pickPhoto} haptic="selection" accessibilityLabel="Ganti foto">
@@ -525,7 +520,7 @@ export default function ReviewScreen() {
           </Txt>
           {aiBusy ? (
             <Txt variant="small" color={theme.primary} style={{ fontWeight: '600' }}>
-              Menyalin item satu per satuâ€¦
+              Menyalin item satu per satu…
             </Txt>
           ) : null}
         </View>
@@ -548,7 +543,7 @@ export default function ReviewScreen() {
           }}>
           <Ionicons name="sparkles" size={14} color={theme.primary} />
           <Txt variant="small" color={theme.primary} style={{ fontWeight: '700' }}>
-            {aiBusy ? 'Gemini sedang membacaâ€¦' : 'Baca ulang dengan AI'}
+            {aiBusy ? 'Gemini sedang membaca…' : 'Baca ulang dengan AI'}
           </Txt>
         </PressableScale>
       ) : null}
@@ -579,7 +574,7 @@ export default function ReviewScreen() {
                   {memory.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted} style={{ fontSize: 10 }}>
-                  {memory.lastCategory} Â· {formatRupiah(memory.lastAmount)}
+                  {memory.lastCategory} · {formatRupiah(memory.lastAmount)}
                 </Txt>
               </PressableScale>
             ))}
@@ -711,14 +706,24 @@ export default function ReviewScreen() {
           </Txt>
           <Txt variant="section">{formatRupiah(subtotal)}</Txt>
         </View>
-        <MoneyInput
-          label="Pajak (opsional)"
-          value={tax}
-          onChange={(value) => {
-            setTax(value);
-            if (!amountTouched.current && subtotal > 0) setAmount(subtotal + (value ?? 0));
-          }}
-        />
+        <View style={{ gap: space.sm }}>
+          <Txt variant="label" color={theme.textMuted}>
+            Pajak (opsional)
+          </Txt>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {[0, 10, 12].map((rate) => (
+              <Chip
+                key={rate}
+                label={rate === 0 ? 'Tanpa' : `${rate}%`}
+                selected={taxRate === rate}
+                onPress={() => applyTaxRate(rate as 0 | 10 | 12)}
+              />
+            ))}
+          </View>
+          <Txt variant="small" color={theme.textMuted}>
+            {taxRate > 0 ? `${taxRate}% dari item = ${formatRupiah(tax ?? 0)}` : 'Tanpa pajak'}
+          </Txt>
+        </View>
         <MoneyInput
           label="Total dibayar"
           value={amount}
@@ -732,12 +737,68 @@ export default function ReviewScreen() {
 
       <View style={{ gap: space.sm }}>
         <SectionTitle>Kategori</SectionTitle>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          {categories.map((item) => (
-            <Chip key={item} label={item} selected={category === item} onPress={() => setCategory(item)} />
-          ))}
-        </View>
+        <PressableScale
+          onPress={() => setCategoryOpen(true)}
+          haptic="selection"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            backgroundColor: theme.card,
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: radii.md,
+            paddingHorizontal: space.md,
+            minHeight: 54,
+          }}>
+          <CategoryIcon
+            icon={(categoryDefs.find((def) => def.name === category) ?? categoryDef(category)).icon}
+            color={(categoryDefs.find((def) => def.name === category) ?? categoryDef(category)).color}
+            size={22}
+          />
+          <Txt variant="body" style={{ flex: 1, fontWeight: '600' }}>
+            {category}
+          </Txt>
+          <Ionicons name="chevron-down" size={16} color={theme.textMuted} />
+        </PressableScale>
       </View>
+
+      <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
+        <PressableScale style={{ flex: 1, backgroundColor: theme.overlay }} onPress={() => setCategoryOpen(false)} />
+        <View
+          style={{
+            backgroundColor: theme.bg,
+            borderTopLeftRadius: radii.xxl,
+            borderTopRightRadius: radii.xxl,
+            padding: space.xl,
+            paddingBottom: space.xxxl,
+            gap: space.sm,
+            maxHeight: '75%',
+          }}>
+          <Txt variant="title">Pilih kategori</Txt>
+          <ScrollView contentContainerStyle={{ gap: 2 }}>
+            {categories.map((item) => {
+              const def = categoryDefs.find((d) => d.name === item) ?? categoryDef(item);
+              return (
+                <PressableScale
+                  key={item}
+                  onPress={() => {
+                    setCategory(item);
+                    setCategoryOpen(false);
+                  }}
+                  haptic="selection"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 10 }}>
+                  <CategoryIcon icon={def.icon} color={def.color} size={24} />
+                  <Txt variant="body" style={{ flex: 1, fontWeight: category === item ? '700' : '400' }}>
+                    {item}
+                  </Txt>
+                  {category === item ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
+                </PressableScale>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Field label="Catatan (opsional)" value={note} onChangeText={setNote} placeholder="Jamuan klien" multiline />
 
@@ -759,7 +820,7 @@ export default function ReviewScreen() {
               <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
               <Txt variant="title">Tersimpan</Txt>
               <Txt variant="small" color={theme.textMuted} style={{ textAlign: 'center' }}>
-                {merchant} Â· {formatRupiah(amount ?? 0)}
+                {merchant} · {formatRupiah(amount ?? 0)}
               </Txt>
             </View>
             <AppButton
@@ -797,7 +858,7 @@ export default function ReviewScreen() {
                   {dup.expense.merchant}
                 </Txt>
                 <Txt variant="small" color={theme.textMuted}>
-                  {dup.expense.date} Â· {formatRupiah(dup.expense.amount)}
+                  {dup.expense.date} · {formatRupiah(dup.expense.amount)}
                 </Txt>
               </Card>
             ) : null}
@@ -816,6 +877,7 @@ export default function ReviewScreen() {
     </Screen>
   );
 }
+
 
 
 

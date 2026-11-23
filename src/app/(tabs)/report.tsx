@@ -355,9 +355,16 @@ export default function ReportScreen() {
       <Card style={{ gap: space.sm }}>
         <SectionTitle>Insight</SectionTitle>
         {topCategory ? (
-          <Txt variant="small" color={theme.textMuted}>
-            • {topCategory.category} menyerap {topShare}% pengeluaran bulan ini.
-          </Txt>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <CategoryIcon
+              icon={(categoryDefs.find((def) => def.name === topCategory.category) ?? { icon: 'tag', color: theme.textMuted }).icon}
+              color={(categoryDefs.find((def) => def.name === topCategory.category) ?? { icon: 'tag', color: theme.textMuted }).color}
+              size={16}
+            />
+            <Txt variant="small" color={theme.textMuted} style={{ flex: 1 }}>
+              {topCategory.category} menyerap {topShare}% pengeluaran bulan ini.
+            </Txt>
+          </View>
         ) : null}
         <Txt variant="small" color={theme.textMuted}>
             • {noSpendDays} hari tanpa pengeluaran dari {elapsedDays} hari.

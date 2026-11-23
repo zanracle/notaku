@@ -18,6 +18,7 @@ import {
 } from '@/db/queries';
 import { formatDateID } from '@/lib/dates';
 import { formatRupiah } from '@/lib/money';
+import { CategoryIcon } from '@/ui/category-icon';
 import { printReceipts, shareReceiptCsv, shareReceiptPdf } from '@/receipt/export';
 import type { ReceiptData } from '@/receipt/build';
 import { useApp } from '@/state/app';
@@ -39,7 +40,7 @@ export default function WalletDetailScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { settings } = useApp();
+  const { settings, categoryDefs } = useApp();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState({ total: 0, count: 0, tax: 0 });
@@ -187,10 +188,17 @@ export default function WalletDetailScreen() {
               const tint = colorForCategory(row.category);
               return (
                 <View key={row.category} style={{ gap: 6 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Txt variant="small" style={{ fontWeight: '600' }}>
-                      {row.category}
-                    </Txt>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CategoryIcon
+                        icon={(categoryDefs.find((def) => def.name === row.category) ?? { icon: 'tag', color: tint }).icon}
+                        color={(categoryDefs.find((def) => def.name === row.category) ?? { icon: 'tag', color: tint }).color}
+                        size={16}
+                      />
+                      <Txt variant="small" style={{ fontWeight: '600' }}>
+                        {row.category}
+                      </Txt>
+                    </View>
                     <Txt variant="small" color={theme.textMuted}>
                       {formatRupiah(row.total)}
                     </Txt>
