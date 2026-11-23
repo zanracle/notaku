@@ -287,6 +287,12 @@ export default function ReviewScreen() {
           setSource(expense.source);
           setConfidence(expense.confidence);
           const savedItems = await listItems(expense.id);
+          const savedSubtotal = savedItems.reduce((sum, item) => sum + item.price * (item.qty || 1), 0);
+          if (expense.tax > 0 && savedSubtotal > 0) {
+            const diff10 = Math.abs(expense.tax - savedSubtotal * 0.1) / expense.tax;
+            const diff12 = Math.abs(expense.tax - savedSubtotal * 0.12) / expense.tax;
+            setTaxRate(diff10 < 0.02 ? 10 : diff12 < 0.02 ? 12 : 0);
+          }
           setItems(toDraft(savedItems));
           setReceiptItems(savedItems);
         }
@@ -721,7 +727,11 @@ export default function ReviewScreen() {
             ))}
           </View>
           <Txt variant="small" color={theme.textMuted}>
-            {taxRate > 0 ? `${taxRate}% dari item = ${formatRupiah(tax ?? 0)}` : 'Tanpa pajak'}
+            {taxRate > 0
+              ? `${taxRate}% dari item = ${formatRupiah(tax ?? 0)}`
+              : tax
+                ? `Pajak terbaca ${formatRupiah(tax)} — pilih persen untuk hitung ulang`
+                : 'Tanpa pajak'}
           </Txt>
         </View>
         <MoneyInput
